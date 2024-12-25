@@ -1,0 +1,27 @@
+version: '3'
+services:
+  living_scenes:
+    image: livingscenes:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /media/kameel/dev/Datasets:/Datasets
+    environment:
+      - "DISPLAY=$DISPLAY"
+    privileged: true
+    network_mode: "host"
+    command: /bin/bash
+    # Keep container running
+    stdin_open: true 
+    tty: true
+
+    # FOR GPU SUPPORT, seems to be not needed as Voxblox is CPU only
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
