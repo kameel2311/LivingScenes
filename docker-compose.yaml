@@ -1,13 +1,14 @@
 version: '3'
 services:
   living_scenes:
-    image: livingscenes:latest
+    image: livingscenes:conda
     build:
       context: .
       dockerfile: Dockerfile
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - /media/kameel/dev/Datasets:/Datasets
+      - ./exploration:/workspace/exploration
     environment:
       - "DISPLAY=$DISPLAY"
     privileged: true
