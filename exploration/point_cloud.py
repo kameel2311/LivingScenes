@@ -3,6 +3,8 @@ import point_cloud_utils as pcu
 import os
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.spatial.transform import Rotation as R
+
 
 DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
 
@@ -35,6 +37,120 @@ def draw_point_cloud(pointcloud_array, title="", overlay_pointcloud=None):
     ax.set_zlabel("Z Axis")
     plt.title(title)
     plt.show()
+
+
+def draw_camera(ax, K, image_size, pose, scale=1.0, color="blue"):
+    """
+    Draws a camera frustum in 3D using its intrinsics and pose.
+
+    Parameters:
+        ax (mpl_toolkits.mplot3d.Axes3D): The Matplotlib 3D axis to draw on.
+        K (numpy.ndarray): 3x3 camera intrinsics matrix.
+        pose (numpy.ndarray): 4x4 camera pose matrix (world to camera transformation).
+        scale (float): Scaling factor for the frustum size.
+        color (str): Color of the frustum lines.
+    """
+    # Camera intrinsics
+    fx, fy = K[0, 0], K[1, 1]
+    cx, cy = K[0, 2], K[1, 2]
+    image_width, image_height = image_size
+
+    # Image plane corners in normalized device coordinates (NDC)
+    img_corners = np.array(
+        [
+            [-cx / fx, -cy / fy, 1],  # Bottom-left
+            [(image_width - cx) / fx, -cy / fy, 1],  # Bottom-right
+            [(image_width - cx) / fx, (image_height - cy) / fy, 1],  # Top-right
+            [-cx / fx, (image_height - cy) / fy, 1],  # Top-left
+        ]
+    ).T
+
+    # Scale the frustum size
+    img_corners *= scale
+
+    # Camera center in world frame
+    cam_center = np.array([0, 0, 0, 1])
+
+    # Transform frustum corners and camera center using the pose matrix
+    world_corners = pose @ np.vstack((img_corners, np.ones((1, 4))))
+    world_cam_center = pose @ cam_center
+
+    # Extract points in 3D
+    world_corners = world_corners[:3, :].T
+    world_cam_center = world_cam_center[:3]
+
+    # Draw frustum edges
+    for i in range(4):
+        ax.plot(
+            [world_cam_center[0], world_corners[i, 0]],
+            [world_cam_center[1], world_corners[i, 1]],
+            [world_cam_center[2], world_corners[i, 2]],
+            color=color,
+        )
+
+    # Draw image plane edges
+    for i in range(4):
+        j = (i + 1) % 4
+        ax.plot(
+            [world_corners[i, 0], world_corners[j, 0]],
+            [world_corners[i, 1], world_corners[j, 1]],
+            [world_corners[i, 2], world_corners[j, 2]],
+            color=color,
+        )
+
+
+def draw_point_cloud_with_cameras(
+    pointcloud_array, title="", overlay_pointcloud=None, cameras=None
+):
+    """
+    Visualize the point cloud and optionally overlay another point cloud or cameras.
+
+    Parameters:
+        pointcloud_array (numpy.ndarray): Nx3 array of point cloud data.
+        title (str): Title of the plot.
+        overlay_pointcloud (numpy.ndarray): Nx3 array for an overlay point cloud.
+        cameras (list): List of tuples (K, pose) for camera intrinsics and poses.
+    """
+    # Visualize the point cloud using Matplotlib
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+    ax.scatter(
+        pointcloud_array[:, 0],
+        pointcloud_array[:, 1],
+        pointcloud_array[:, 2],
+        s=3,
+        c="blue",
+        alpha=0.5,
+    )
+
+    if overlay_pointcloud is not None:
+        ax.scatter(
+            overlay_pointcloud[:, 0],
+            overlay_pointcloud[:, 1],
+            overlay_pointcloud[:, 2],
+            s=3,
+            c="red",
+            alpha=0.5,
+        )
+
+    if cameras:
+        for K, image_size, pose in cameras:
+            draw_camera(ax, K, image_size, pose, scale=1, color="green")
+            ax.scatter(
+                pose[0, 3],
+                pose[1, 3],
+                pose[2, 3],
+                s=10,
+                c="red",
+                alpha=0.5,
+            )
+
+    ax.set_xlabel("X Axis")
+    ax.set_ylabel("Y Axis")
+    ax.set_zlabel("Z Axis")
+    plt.title(title)
+    plt.show()
+    return fig, ax
 
 
 def path_generator(data_dir, object_class, file, instance):
@@ -147,6 +263,34 @@ def center_pointcloud(pointcloud):
     return pointcloud - np.mean(pointcloud, axis=0)
 
 
+def generate_random_rotation(pure_z_rotation=False):
+    """
+    Generate a random 3D rotation matrix (uniformly sampled from SO(3)).
+
+    Returns:
+        np.ndarray: A 3x3 rotation matrix.
+    """
+    if not pure_z_rotation:
+        # Generate a random quaternion
+        random_rotation = R.random()
+        # Convert the quaternion to a rotation matrix
+        rotation_matrix = random_rotation.as_matrix()
+    else:
+        # Generate a random angle
+        angle = np.random.uniform(0, 2 * np.pi)
+        # Generate a rotation matrix around the z-axis
+        rotation_matrix = R.from_rotvec([0, 0, angle]).as_matrix()
+    return rotation_matrix
+
+
+def rotate_pointcloud_randomly(pointcloud, pure_z_rotation=False):
+    """
+    Rotate the point cloud using the rotation matrix
+    """
+    rotation_matrix = generate_random_rotation(pure_z_rotation)
+    return (rotation_matrix @ pointcloud.T).T, rotation_matrix
+
+
 if __name__ == "__main__":
     # Load Object Instance
     object_class = "chair"
@@ -187,3 +331,6 @@ if __name__ == "__main__":
     draw_point_cloud(
         v_viewpoint_1, title="Viewpoint Sub-sampling", overlay_pointcloud=v_viewpoint_2
     )
+
+    # Random Point Cloud Rotations
+    draw_point_cloud(rotate_pointcloud_randomly(v_sampled), title="Random Rotation")
