@@ -263,6 +263,16 @@ def center_pointcloud(pointcloud):
     return pointcloud - np.mean(pointcloud, axis=0)
 
 
+def center_pointcloud_v2(pointcloud):
+    """
+    Center the point cloud at the min max points
+    """
+    minimium = np.min(pointcloud, axis=0)
+    maximum = np.max(pointcloud, axis=0)
+    average = (minimium + maximum) / 2
+    return pointcloud - average, average
+
+
 def generate_random_rotation(pure_z_rotation=False):
     """
     Generate a random 3D rotation matrix (uniformly sampled from SO(3)).

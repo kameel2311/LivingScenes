@@ -104,7 +104,7 @@ if __name__ == "__main__":
             gt_rotation = []
             for v, f in object_meshes:
                 pointcloud = sample_mesh_random(v, f, num_samples=pc_count)
-                # pointcloud = add_gaussian_noise(pointcloud, sigma=0.5)
+                pointcloud = add_gaussian_noise(pointcloud, sigma=0.5)
                 ref_object_pointclouds.append(pointcloud)
                 # draw_point_cloud(pointcloud)
 
@@ -112,7 +112,7 @@ if __name__ == "__main__":
                 pointcloud, rot_matrix = rotate_pointcloud_randomly(
                     pointcloud, pure_z_rotation=True
                 )
-                # pointcloud = add_gaussian_noise(pointcloud, sigma=0.2)
+                pointcloud = add_gaussian_noise(pointcloud, sigma=0.2)
                 rescan_object_pointclouds.append(pointcloud)
                 gt_rotation.append(torch.tensor(rot_matrix))
             gt_rotation = torch.stack(gt_rotation)
