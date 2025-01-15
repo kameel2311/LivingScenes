@@ -3,22 +3,42 @@ import point_cloud_utils as pcu
 from point_cloud import *
 import pyrender
 import trimesh
+import random
 
-# scale = 1
-# image_height = 100 * scale
-# image_width = 100 * scale
-# fx = 100 * scale
-# fy = 100 * scale
-# cx = 50 * scale
-# cy = 50 * scale
-
-image_height = 2000
-image_width = 2000
-fx = 500
-fy = 500
+scale = 1
+image_height = 500 * scale
+image_width = 500 * scale
+fx = 200 * scale
+fy = 200 * scale
 cx = image_width / 2
 cy = image_height / 2
+
+# image_height = 2000
+# image_width = 2000
+# fx = 500
+# fy = 500
+# cx = image_width / 2
+# cy = image_height / 2
 k = np.array([fx, 0, cx, 0, fy, cy, 0, 0, 1], dtype=np.float32).reshape((3, 3))
+
+
+def transformation_matrix(rotation, translation):
+    """
+    Create a 4x4 transformation matrix from rotation and translation vectors.
+
+    Parameters:
+        rotation (numpy.ndarray): 3x3 rotation matrix.
+        translation (numpy.ndarray): 3x1 translation vector.
+
+    Returns:
+        numpy.ndarray: 4x4 transformation matrix.
+    """
+    # Create a 4x4 transformation matrix
+    transformation = np.eye(4)
+    transformation[:3, :3] = rotation
+    transformation[:3, 3] = translation
+
+    return transformation
 
 
 def points_around_sphere(num_points, radius=1):
@@ -33,11 +53,12 @@ def points_around_sphere(num_points, radius=1):
     return np.stack((x, y, z), axis=1)
 
 
-def calculate_aligning_rotation(focalpoint):
-    """Calculate rotation to align camera with focal point"""
-    camera_center = np.array([image_width / 2, image_height / 2, 1])
-    deproj_camera_center = np.linalg.inv(k) @ camera_center * 1
-    rotation = find_rotation(deproj_camera_center, -1 * focalpoint)
+def calculate_aligning_rotation(focalpoint, k, image_width, image_height):
+    """Calculate rotation to align camera with focal point/camrea center"""
+    focalpoint = np.reshape(focalpoint, (3))
+    image_center = np.array([image_width / 2, image_height / 2, 1])
+    deproj_image_center = np.linalg.inv(k) @ image_center * 1
+    rotation = find_rotation(deproj_image_center, -1 * focalpoint)
     return rotation
 
 
@@ -61,7 +82,7 @@ def find_rotation(v1, v2):
 def convert_cam_pose_to_opengl(cv_pose):
     """
     Convert camera pose from computer vision convention (+Z forward)
-    to OpenGL convention (-Z forward)
+    to OpenGL convention (-Z forward) and Y down to Y up
     """
     # OpenGL to CV coordinate change: flip Y and Z
     coord_change = np.array(
@@ -112,11 +133,63 @@ def render_depth_map(mesh_vertices, mesh_faces, camera_pose):
     return depth
 
 
+def deproject_depth_image(depth, k):
+    """
+    Deproject depth image to point cloud
+
+    Args:
+        depth: HxW numpy array of depth values
+        k: 3x3 camera intrinsic matrix
+
+    Returns:
+        point_cloud: Nx3 numpy array of 3D points
+    """
+    # Create grid of pixel coordinates
+    h, w = depth.shape
+    u, v = np.meshgrid(np.arange(w), np.arange(h))
+    u = u.flatten()
+    v = v.flatten()
+
+    # Deproject depth image to 3D points
+    z = depth.flatten()
+    x = (u - k[0, 2]) * z / k[0, 0]
+    y = (v - k[1, 2]) * z / k[1, 1]
+
+    point_cloud = np.stack((x, y, z), axis=1)
+
+    return point_cloud
+
+
+def sample_viewpoint(pointcloud, k, vertices, faces, num_points):
+    """
+    Sample a viewpoint from the point cloud
+
+    Args:
+        pointcloud: Nx3 numpy array of 3D points
+        k: 3x3 camera intrinsic matrix
+
+    Returns:
+        pose: 4x4 camera pose matrix
+    """
+    pointcloud_centered, center = center_pointcloud_v2(pointcloud)
+    max_radius = np.max(np.linalg.norm(pointcloud_centered, axis=1))
+    sphere_point = points_around_sphere(1, radius=max_radius + 1.5)[0]
+    rotation = calculate_aligning_rotation(sphere_point)
+    pose = np.eye(4)
+    pose[:3, :3] = rotation
+    pose[:3, 3] = sphere_point + center
+    depth = render_depth_map(vertices, faces, pose)
+    visible_points = deproject_depth_image(depth, k)
+    rows_id = random.sample(range(0, visible_points.shape[0] - 1), num_points)
+    visible_points = visible_points[rows_id]
+    return visible_points
+
+
 if __name__ == "__main__":
     # Load Object Instance
     object_class = "chair"
     file = "train"
-    instance = 100
+    instance = 3
     path_to_file = path_generator(DATA_DIR, object_class, file, instance)
 
     # Load vertices and faces
@@ -129,7 +202,7 @@ if __name__ == "__main__":
     max_radius = np.max(np.linalg.norm(pointcloud_centered, axis=1))
 
     # Generate camera positions
-    sphere_points = points_around_sphere(24, radius=max_radius + 0.5)
+    sphere_points = points_around_sphere(24, radius=max_radius + 1.5)
 
     # Render from multiple viewpoints
     depth_maps = []
@@ -143,17 +216,34 @@ if __name__ == "__main__":
         # pose[:3, 3] = point + np.mean(pointcloud, axis=0)
         pose[:3, 3] = point + center
 
-        # Plot camera pose
-        # draw_point_cloud_with_cameras(
-        #     pointcloud, "Cameras", cameras=[(k, [image_width, image_height], pose)]
-        # )
-
         # Render depth map
         depth = render_depth_map(v, f, pose)
         depth_maps.append(depth)
 
         print(f"Depth map shape: {depth.shape}")
         print(f"Depth range: {np.min(depth[depth >= 0])} to {np.max(depth)}")
+
+        # Deproject depth image to point cloud
+        visible_points = deproject_depth_image(depth, k)
+        rows_id = random.sample(range(0, visible_points.shape[0] - 1), 600)
+        visible_points = visible_points[rows_id]
+
+        # # Transform point cloud to world coordinates
+        # inv_pose = np.linalg.inv(pose)
+        # visible_points = inv_pose[:3, :3] @ visible_points.T + inv_pose[:3, 3]
+
+        # Plot camera pose
+        draw_point_cloud_with_cameras(
+            pointcloud,
+            "Cameras",
+            cameras=[(k, [image_width, image_height], pose)],
+            overlay_pointcloud=visible_points,
+        )
+
+        plt.imshow(depth)
+        plt.colorbar()
+        plt.title("Depth Map")
+        plt.show()
 
     # Optional: visualize first depth map
     import matplotlib.pyplot as plt

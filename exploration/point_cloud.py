@@ -39,14 +39,14 @@ def draw_point_cloud(pointcloud_array, title="", overlay_pointcloud=None):
     plt.show()
 
 
-def draw_camera(ax, K, image_size, pose, scale=1.0, color="blue"):
+def draw_camera(ax, K, image_size, pose, scale=1.0):
     """
     Draws a camera frustum in 3D using its intrinsics and pose.
 
     Parameters:
         ax (mpl_toolkits.mplot3d.Axes3D): The Matplotlib 3D axis to draw on.
         K (numpy.ndarray): 3x3 camera intrinsics matrix.
-        pose (numpy.ndarray): 4x4 camera pose matrix (world to camera transformation).
+        pose (numpy.ndarray): 4x4 camera pose matrix w_T_c.
         scale (float): Scaling factor for the frustum size.
         color (str): Color of the frustum lines.
     """
@@ -79,13 +79,15 @@ def draw_camera(ax, K, image_size, pose, scale=1.0, color="blue"):
     world_corners = world_corners[:3, :].T
     world_cam_center = world_cam_center[:3]
 
+    colours = ["red", "green", "blue", "yellow"]
+
     # Draw frustum edges
     for i in range(4):
         ax.plot(
             [world_cam_center[0], world_corners[i, 0]],
             [world_cam_center[1], world_corners[i, 1]],
             [world_cam_center[2], world_corners[i, 2]],
-            color=color,
+            color=colours[i],
         )
 
     # Draw image plane edges
@@ -95,7 +97,7 @@ def draw_camera(ax, K, image_size, pose, scale=1.0, color="blue"):
             [world_corners[i, 0], world_corners[j, 0]],
             [world_corners[i, 1], world_corners[j, 1]],
             [world_corners[i, 2], world_corners[j, 2]],
-            color=color,
+            color=colours[i],
         )
 
 
@@ -135,7 +137,7 @@ def draw_point_cloud_with_cameras(
 
     if cameras:
         for K, image_size, pose in cameras:
-            draw_camera(ax, K, image_size, pose, scale=1, color="green")
+            draw_camera(ax, K, image_size, pose, scale=1)
             ax.scatter(
                 pose[0, 3],
                 pose[1, 3],
