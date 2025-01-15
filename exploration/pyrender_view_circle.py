@@ -9,8 +9,9 @@ from point_cloud import (
     center_pointcloud,
     draw_point_cloud_with_cameras,
 )
-from pyrender_view_render import transformation_matrix
+from pyrender_view_render import transformation_matrix, deproject_depth_image
 import point_cloud_utils as pcu
+import matplotlib.pyplot as plt
 
 DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
 
@@ -122,6 +123,62 @@ def get_circle_poses(
     return world_camera_poses, pyrender_camera_poses
 
 
+def render_point_cloud_from_mesh(
+    v,
+    f,
+    camera_py,
+    k,
+    image_width,
+    image_height,
+    num_points,
+    world_pose,
+    pyrender_pose,
+    visualize=False,
+):
+    if visualize:
+        draw_point_cloud_with_cameras(
+            pointcloud,
+            "Point Cloud with Circular cameras",
+            cameras=[(k, [image_width, image_height], world_pose)],
+        )
+
+    # Rendering
+    scene = pyrender.Scene()
+    mesh = trimesh.Trimesh(vertices=v, faces=f)
+    mesh = pyrender.Mesh.from_trimesh(mesh)
+    scene.add(mesh, pose=PY_T_W)
+    scene.add(camera_py, pose=pyrender_pose)
+
+    pyrender.Viewer(
+        scene, use_raymond_lighting=True, viewport_size=(image_width, image_height)
+    )
+
+    depth = renderer.render(scene, flags=pyrender.RenderFlags.DEPTH_ONLY)
+
+    if visualize:
+        plt.imshow(depth)
+        plt.colorbar()
+        plt.title("Depth Map")
+        plt.show()
+
+    # Deproject & sample PC
+    visible_points = deproject_depth_image(depth, k, y_multipler=-1)
+    rows_id = random.sample(range(0, visible_points.shape[0] - 1), num_points)
+    visible_points = visible_points[rows_id]
+
+    # Transform point cloud to world coordinates
+    visible_points = (world_pose[:3, :3] @ visible_points.T).T + world_pose[:3, 3]
+
+    if visualize:
+        draw_point_cloud_with_cameras(
+            pointcloud,
+            "Point Cloud with Circular camera and visible points",
+            overlay_pointcloud=visible_points,
+            cameras=[(k, [image_width, image_height], world_pose)],
+        )
+    return visible_points
+
+
 if __name__ == "__main__":
     # Load Object Instance
     object_class = "chair"
@@ -143,24 +200,20 @@ if __name__ == "__main__":
     world_pose, pyrender_pose = get_circle_poses(5, 0, 120, radius, center)
 
     # Loading Mesh and Setup Camera
-    mesh = trimesh.Trimesh(vertices=v, faces=f)
     camera_py = pyrender.IntrinsicsCamera(fx=fx, fy=fy, cx=cx, cy=cy)
-    mesh = pyrender.Mesh.from_trimesh(mesh)
     renderer = pyrender.OffscreenRenderer(image_width, image_height)
 
     # Loop through the camera poses
     for i in range(num_cameras):
-        draw_point_cloud_with_cameras(
-            pointcloud,
-            "Point Cloud with Circular cameras",
-            cameras=[(k, [image_width, image_height], world_pose[i])],
-        )
-
-        # Rendering
-        scene = pyrender.Scene()
-        scene.add(mesh, pose=PY_T_W)
-        scene.add(camera_py, pose=pyrender_pose[i])
-
-        pyrender.Viewer(
-            scene, use_raymond_lighting=True, viewport_size=(image_width, image_height)
+        rendered_pc = render_point_cloud_from_mesh(
+            v,
+            f,
+            camera_py,
+            k,
+            image_width,
+            image_height,
+            600,
+            world_pose[i],
+            pyrender_pose[i],
+            visualize=True,
         )
