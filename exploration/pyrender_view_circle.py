@@ -15,19 +15,30 @@ import matplotlib.pyplot as plt
 
 DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
 
-scale = 1
-image_height = 500 * scale
-image_width = 500 * scale
-fx = 250 * scale
-fy = 250 * scale
-cx = image_width / 2
-cy = image_height / 2
-k = np.array([fx, 0, cx, 0, fy, cy, 0, 0, 1], dtype=np.float32).reshape((3, 3))
-
 W_R_C = np.array([[1, 0, 0], [0, 0, 1], [0, 1, 0]])
 PY_R_W = np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]])
 PY_T_W = transformation_matrix(PY_R_W, np.zeros([1, 3]))
 W_T_C = transformation_matrix(W_R_C, np.zeros([1, 3]))
+
+
+class Camera:
+    def __init__(self, scale, image_height, image_width, fx, fy):
+        self.scale = scale
+        self.image_height = image_height
+        self.image_width = image_width
+        self.fx = fx / scale
+        self.fy = fy / scale
+        self.cx = self.image_width / 2
+        self.cy = self.image_height / 2
+        self.k = np.array(
+            [self.fx, 0, self.cx, 0, self.fy, self.cy, 0, 0, 1], dtype=np.float32
+        ).reshape((3, 3))
+
+    def get_pyrender_camera(self):
+        return pyrender.IntrinsicsCamera(fx=self.fx, fy=self.fy, cx=self.cx, cy=self.cy)
+
+    def get_intrinsics(self):
+        return self.k
 
 
 def sample_points_in_circle(num_points, angle_lower, angle_upper, radius, center):
@@ -133,6 +144,7 @@ def render_point_cloud_from_mesh(
     num_points,
     world_pose,
     pyrender_pose,
+    mesh_scale=1,
     visualize=False,
 ):
     if visualize:
@@ -145,13 +157,19 @@ def render_point_cloud_from_mesh(
     # Rendering
     scene = pyrender.Scene()
     mesh = trimesh.Trimesh(vertices=v, faces=f)
+    mesh.apply_scale(mesh_scale)
+
+    # if visualize:
+    #     mesh.show()
+
     mesh = pyrender.Mesh.from_trimesh(mesh)
     scene.add(mesh, pose=PY_T_W)
     scene.add(camera_py, pose=pyrender_pose)
 
-    pyrender.Viewer(
-        scene, use_raymond_lighting=True, viewport_size=(image_width, image_height)
-    )
+    if visualize:
+        pyrender.Viewer(
+            scene, use_raymond_lighting=True, viewport_size=(image_width, image_height)
+        )
 
     depth = renderer.render(scene, flags=pyrender.RenderFlags.DEPTH_ONLY)
 
@@ -179,41 +197,66 @@ def render_point_cloud_from_mesh(
     return visible_points
 
 
+def scale_point_cloud(pointcloud, desired_max_dim=30):
+    pointcloud_centered, center = center_pointcloud(pointcloud)
+    radius = np.max(np.linalg.norm(pointcloud_centered, axis=1))
+    scaling_factor = np.round(desired_max_dim / radius, 1)
+
+    # Scaling
+    pointcloud *= scaling_factor
+    pointcloud_centered *= scaling_factor
+    center = np.reshape(center * scaling_factor, (1, 3))
+
+    return pointcloud, pointcloud_centered, center, scaling_factor
+
+
 if __name__ == "__main__":
     # Load Object Instance
     object_class = "chair"
     file = "train"
-    instance = 2
-    path_to_file = path_generator(DATA_DIR, object_class, file, instance)
+    instance = 1
+    for instance in [1]:
+        path_to_file = path_generator(DATA_DIR, object_class, file, instance)
 
-    # Load vertices and faces
-    v, f = pcu.load_mesh_vf(path_to_file)
+        # Load vertices and faces
+        v, f = pcu.load_mesh_vf(path_to_file)
 
-    # Sample points from mesh
-    pointcloud = sample_mesh_random(v, f, num_samples=600)
-    pointcloud_centered, center = center_pointcloud(pointcloud)
-    center = np.reshape(center, (1, 3))
-
-    # Camera Poses
-    num_cameras = 5
-    radius = np.max(np.linalg.norm(pointcloud_centered, axis=1)) * 1.5
-    world_pose, pyrender_pose = get_circle_poses(5, 0, 120, radius, center)
-
-    # Loading Mesh and Setup Camera
-    camera_py = pyrender.IntrinsicsCamera(fx=fx, fy=fy, cx=cx, cy=cy)
-    renderer = pyrender.OffscreenRenderer(image_width, image_height)
-
-    # Loop through the camera poses
-    for i in range(num_cameras):
-        rendered_pc = render_point_cloud_from_mesh(
-            v,
-            f,
-            camera_py,
-            k,
-            image_width,
-            image_height,
-            600,
-            world_pose[i],
-            pyrender_pose[i],
-            visualize=True,
+        # Sample points from mesh
+        pointcloud = sample_mesh_random(v, f, num_samples=600)
+        pointcloud, pointcloud_centered, center, scaling_factor = scale_point_cloud(
+            pointcloud
         )
+
+        # Define Camera
+        image_height = 500
+        image_width = 500
+        camera = Camera(
+            scale=1, image_height=image_height, image_width=image_width, fx=250, fy=250
+        )
+        k = camera.get_intrinsics()
+
+        # Camera Poses
+        num_cameras = 5
+        radius = np.max(np.linalg.norm(pointcloud_centered, axis=1)) * 1.5
+        world_pose, pyrender_pose = get_circle_poses(5, 0, 120, radius, center)
+
+        # Loading Mesh and Setup Camera
+        camera_py = camera.get_pyrender_camera()
+        renderer = pyrender.OffscreenRenderer(image_width, image_height)
+
+        # Loop through the camera poses
+        for i in range(num_cameras):
+            print(pyrender_pose[i])
+            rendered_pc = render_point_cloud_from_mesh(
+                v,
+                f,
+                camera_py,
+                k,
+                image_width,
+                image_height,
+                600,
+                world_pose[i],
+                pyrender_pose[i],
+                mesh_scale=scaling_factor,
+                visualize=True,
+            )

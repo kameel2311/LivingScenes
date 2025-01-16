@@ -1,10 +1,9 @@
 # Exploring Point Cloud Utils with ModelNet10
-import point_cloud_utils as pcu
 import os
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-
+import point_cloud_utils as pcu
 
 DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
 
@@ -35,6 +34,7 @@ def draw_point_cloud(pointcloud_array, title="", overlay_pointcloud=None):
     ax.set_xlabel("X Axis")
     ax.set_ylabel("Y Axis")
     ax.set_zlabel("Z Axis")
+    ax.set_aspect("equal", adjustable="box")
     plt.title(title)
     plt.show()
 
@@ -150,6 +150,7 @@ def draw_point_cloud_with_cameras(
     ax.set_xlabel("X Axis")
     ax.set_ylabel("Y Axis")
     ax.set_zlabel("Z Axis")
+    ax.set_aspect("equal", adjustable="box")
     plt.title(title)
     plt.show()
     return fig, ax
@@ -262,7 +263,8 @@ def center_pointcloud(pointcloud):
     """
     Center the point cloud at the origin
     """
-    return pointcloud - np.mean(pointcloud, axis=0)
+    center = np.mean(pointcloud, axis=0)
+    return pointcloud - center, center
 
 
 def center_pointcloud_v2(pointcloud):
