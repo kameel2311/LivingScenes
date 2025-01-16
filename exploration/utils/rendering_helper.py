@@ -1,3 +1,6 @@
+import sys
+
+sys.path.append("../")
 import numpy as np
 import pyrender
 import trimesh
@@ -5,7 +8,7 @@ import random
 import point_cloud_utils as pcu
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
-from pointcloud_helper import (
+from utils.pointcloud_helper import (
     path_generator,
     sample_mesh_random,
     draw_point_cloud_with_cameras,
@@ -106,6 +109,7 @@ def get_circle_poses(
     center,
     pyrender_transform=PY_R_W,
     camera_transform=W_R_C,
+    sequential=True,
 ):
     """
     Get camera poses in a circle in the world frame and pyrender frame
@@ -113,7 +117,12 @@ def get_circle_poses(
     # Generate points on a circle
     angle_lower = np.deg2rad(angle_lower)
     angle_upper = np.deg2rad(angle_upper)
-    thetas = np.linspace(angle_lower, angle_upper, num_points, endpoint=False)
+    if sequential:
+        thetas = np.linspace(angle_lower, angle_upper, num_points, endpoint=False)
+    else:
+        thetas = np.random.uniform(angle_lower, angle_upper, num_points)
+
+    print("Thetas: ", np.rad2deg(thetas))
 
     world_camera_poses = []
     pyrender_camera_poses = []
@@ -254,7 +263,18 @@ if __name__ == "__main__":
     # Load Object Instance
     object_class = "chair"
     file = "train"
-    for instance in [1]:
+
+    # Define Camera
+    image_height = 500
+    image_width = 500
+    camera = Camera(
+        scale=1, image_height=image_height, image_width=image_width, fx=400, fy=400
+    )
+    k = camera.get_intrinsics()
+    num_cameras = 5
+
+    # Loop through the instances
+    for instance in [3]:
         path_to_file = path_generator(DATA_DIR, object_class, file, instance)
 
         # Load vertices and faces
@@ -266,17 +286,9 @@ if __name__ == "__main__":
             pointcloud
         )
 
-        # Define Camera
-        image_height = 500
-        image_width = 500
-        camera = Camera(
-            scale=1, image_height=image_height, image_width=image_width, fx=250, fy=250
-        )
-        k = camera.get_intrinsics()
-
         # Camera Poses
-        num_cameras = 5
-        radius = np.max(np.linalg.norm(pointcloud_centered, axis=1)) * 1.5
+
+        radius = np.max(np.linalg.norm(pointcloud_centered, axis=1)) * 1
         world_pose, pyrender_pose = get_circle_poses(5, 0, 120, radius, center)
 
         # Loading Mesh and Setup Camera

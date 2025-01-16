@@ -5,6 +5,12 @@ import point_cloud_utils as pcu
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 
+from math import log10, floor
+
+
+def round_to_1(x):
+    return round(x, -int(floor(log10(abs(x)))))
+
 
 def draw_point_cloud(pointcloud_array, title="", overlay_pointcloud=None):
     # Visualize the point cloud using Matplotlib
@@ -278,7 +284,7 @@ def center_pointcloud_v2(pointcloud):
 def scale_point_cloud(pointcloud, desired_max_dim=30):
     pointcloud_centered, center = center_pointcloud(pointcloud)
     radius = np.max(np.linalg.norm(pointcloud_centered, axis=1))
-    scaling_factor = np.round(desired_max_dim / radius, 1)
+    scaling_factor = round_to_1(desired_max_dim / radius)
 
     # Scaling
     pointcloud *= scaling_factor

@@ -20,14 +20,10 @@ from utils.pointcloud_helper import (
 
 sys.path.append("../")
 
-import os, sys, yaml, shutil
-import glob
 import torch
 import numpy as np
 import pandas as pd
-import os.path as osp
 from lib_math import torch_se3
-import trimesh
 import point_cloud_utils as pcu
 from pytorch3d.ops import sample_farthest_points as fps
 from tqdm import tqdm
@@ -36,7 +32,6 @@ from lib_more.pose_estimation import kabsch_transformation_estimation, rotation_
 
 from lib_more.pose_estimation import *
 from pycg import vis
-import logging, coloredlogs
 from lib_more.utils import (
     read_list_from_txt,
     load_json,
