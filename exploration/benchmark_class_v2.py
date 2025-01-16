@@ -3,6 +3,20 @@ Comparing Object Instances from the same class and different classes
 """
 
 import sys
+from utils.metrics_helper import (
+    matrix_fitness_metric,
+    plot_data,
+    plot_rre,
+    matrix_angular_similarity,
+)
+
+from utils.pointcloud_helper import (
+    path_generator,
+    sample_mesh_random,
+    draw_point_cloud,
+    add_gaussian_noise,
+    rotate_pointcloud_randomly,
+)
 
 sys.path.append("../")
 
@@ -36,38 +50,6 @@ from evaluate import (
     compute_volumetric_iou,
 )
 
-from utils.metrics_helper import (
-    matrix_fitness_metric,
-    plot_data,
-    plot_rre,
-    matrix_angular_similarity,
-)
-
-from utils.pointcloud_helper import (
-    path_generator,
-    sample_mesh_random,
-    draw_point_cloud,
-    add_gaussian_noise,
-    rotate_pointcloud_randomly,
-)
-from exploration.dep.pyrender_view_render import sample_viewpoint
-
-scale = 1
-image_height = 500 * scale
-image_width = 500 * scale
-fx = 200 * scale
-fy = 200 * scale
-cx = image_width / 2
-cy = image_height / 2
-
-# image_height = 2000
-# image_width = 2000
-# fx = 500
-# fy = 500
-# cx = image_width / 2
-# cy = image_height / 2
-K = np.array([fx, 0, cx, 0, fy, cy, 0, 0, 1], dtype=np.float32).reshape((3, 3))
-
 
 DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
 FOLDER = "train"
@@ -82,11 +64,6 @@ if __name__ == "__main__":
     solver_cfg["shape_priors"]["ckpt_dir"] = ckpt
     solver = More_Solver(solver_cfg)
     model = solver.model
-
-    # Variable Declarations
-    dataset_diagonal_mean = []
-    dataset_off_diagonal_mean = []
-    dataset_off_diagonal_std = []
 
     # Benchmark Iterations
     object_classes = ["chair", "table", "monitor", "sofa"]
@@ -114,21 +91,18 @@ if __name__ == "__main__":
             for i, (v, f) in enumerate(object_meshes):
                 print(f"Object: ", {object_classes[i]}, " index: ", idx)
                 pointcloud = sample_mesh_random(v, f, num_samples=pc_count)
-                # pointcloud = sample_viewpoint(pointcloud, K, v, f, num_points=pc_count)
-
-                # pointcloud = add_gaussian_noise(pointcloud, sigma=0.5)
+                pointcloud = add_gaussian_noise(pointcloud, sigma=0.5)
                 ref_object_pointclouds.append(pointcloud)
                 # draw_point_cloud(pointcloud)
 
                 pointcloud = sample_mesh_random(v, f, num_samples=pc_count)
-                # pointcloud = sample_viewpoint(pointcloud, K, v, f, num_points=pc_count)
-                # pointcloud, rot_matrix = rotate_pointcloud_randomly(
-                #     pointcloud, pure_z_rotation=True
-                # )
-                # pointcloud = add_gaussian_noise(pointcloud, sigma=0.2)
+                pointcloud, rot_matrix = rotate_pointcloud_randomly(
+                    pointcloud, pure_z_rotation=True
+                )
+                pointcloud = add_gaussian_noise(pointcloud, sigma=0.2)
                 rescan_object_pointclouds.append(pointcloud)
-                # gt_rotation.append(torch.tensor(rot_matrix))
-            # gt_rotation = torch.stack(gt_rotation)
+                gt_rotation.append(torch.tensor(rot_matrix))
+            gt_rotation = torch.stack(gt_rotation)
 
             ref_object_pointclouds = (
                 torch.tensor(np.array(ref_object_pointclouds)).cuda().transpose(-1, -2)
@@ -139,8 +113,8 @@ if __name__ == "__main__":
                 .transpose(-1, -2)
             )
 
-            # print(ref_object_pointclouds.shape)
-            # print(rescan_object_pointclouds.shape)
+            print(ref_object_pointclouds.shape)
+            print(rescan_object_pointclouds.shape)
 
             with torch.no_grad():
                 ref_code = model.encode(ref_object_pointclouds)
@@ -148,8 +122,8 @@ if __name__ == "__main__":
 
             ref_code_invariant = ref_code["z_inv"]
             rescan_code_invariant = rescan_code["z_inv"]
-            # ref_code_se3 = ref_code["z_so3"] + ref_code["t"]
-            # rescan_code_se3 = rescan_code["z_so3"] + rescan_code["t"]
+            ref_code_se3 = ref_code["z_so3"] + ref_code["t"]
+            rescan_code_se3 = rescan_code["z_so3"] + rescan_code["t"]
 
             # compute the similarity matrix
             score_mat = matrix_angular_similarity(
@@ -161,14 +135,14 @@ if __name__ == "__main__":
             dataset_off_diagonal_mean.append(off_diag_mean)
             dataset_off_diagonal_std.append(off_diag_std)
 
-            # # Compute the relative transformation matrix
-            # R, t, _, _ = kabsch_transformation_estimation(ref_code_se3, rescan_code_se3)
-            # rres = rotation_error(R, gt_rotation.cuda())
-            # rres = rres.cpu().numpy()
-            # for rre in rres:
-            #     rotational_errors.append(rre[0])
+            # Compute the relative transformation matrix
+            R, t, _, _ = kabsch_transformation_estimation(ref_code_se3, rescan_code_se3)
+            rres = rotation_error(R, gt_rotation.cuda())
+            rres = rres.cpu().numpy()
+            for rre in rres:
+                rotational_errors.append(rre[0])
 
     plot_data(
         dataset_diagonal_mean, dataset_off_diagonal_mean, dataset_off_diagonal_std
     )
-    # plot_rre(rotational_errors, labels=object_classes)
+    plot_rre(rotational_errors, labels=object_classes)
