@@ -151,7 +151,7 @@ def get_circle_poses(
     return world_camera_poses, pyrender_camera_poses
 
 
-def render_point_cloud_from_mesh(
+def render_point_cloud_from_viewpoint(
     v,
     f,
     camera_py,
@@ -162,55 +162,56 @@ def render_point_cloud_from_mesh(
     world_pose,
     pyrender_pose,
     mesh_scale=1,
+    pointcloud=None,
     visualize=False,
 ):
-    if visualize:
-        draw_point_cloud_with_cameras(
-            pointcloud,
-            "Point Cloud with Circular cameras",
-            cameras=[(k, [image_width, image_height], world_pose)],
-        )
 
     # Rendering
     scene = pyrender.Scene()
     mesh = trimesh.Trimesh(vertices=v, faces=f)
     mesh.apply_scale(mesh_scale)
-
-    # if visualize:
-    #     mesh.show()
-
     mesh = pyrender.Mesh.from_trimesh(mesh)
+
+    # Define Scene and Renderer
     scene.add(mesh, pose=PY_T_W)
     scene.add(camera_py, pose=pyrender_pose)
+    renderer = pyrender.OffscreenRenderer(image_width, image_height)
 
-    if visualize:
-        pyrender.Viewer(
-            scene, use_raymond_lighting=True, viewport_size=(image_width, image_height)
-        )
-
+    # Render Depth Image
     depth = renderer.render(scene, flags=pyrender.RenderFlags.DEPTH_ONLY)
-
-    if visualize:
-        plt.imshow(depth)
-        plt.colorbar()
-        plt.title("Depth Map")
-        plt.show()
 
     # Deproject & sample PC
     visible_points = deproject_depth_image(depth, k, y_multipler=-1)
+    visible_points = visible_points[visible_points[:, 2] != 0]
     rows_id = random.sample(range(0, visible_points.shape[0] - 1), num_points)
     visible_points = visible_points[rows_id]
 
     # Transform point cloud to world coordinates
     visible_points = (world_pose[:3, :3] @ visible_points.T).T + world_pose[:3, 3]
 
+    # Visualize
     if visualize:
-        draw_point_cloud_with_cameras(
-            pointcloud,
-            "Point Cloud with Circular camera and visible points",
-            overlay_pointcloud=visible_points,
-            cameras=[(k, [image_width, image_height], world_pose)],
-        )
+        # pyrender.Viewer(
+        #     scene, use_raymond_lighting=True, viewport_size=(image_width, image_height)
+        # )
+        plt.imshow(depth)
+        plt.colorbar()
+        plt.title("Depth Map")
+        plt.show()
+        if pointcloud is not None:
+            draw_point_cloud_with_cameras(
+                pointcloud,
+                "Point Cloud with Circular camera and visible points",
+                overlay_pointcloud=visible_points,
+                cameras=[(k, [image_width, image_height], world_pose)],
+            )
+        else:
+            draw_point_cloud_with_cameras(
+                visible_points,
+                "Point Cloud with Circular camera and visible points",
+                cameras=[(k, [image_width, image_height], world_pose)],
+            )
+
     return visible_points
 
 
@@ -284,8 +285,7 @@ if __name__ == "__main__":
 
         # Loop through the camera poses
         for i in range(num_cameras):
-            print(pyrender_pose[i])
-            rendered_pc = render_point_cloud_from_mesh(
+            rendered_pc = render_point_cloud_from_viewpoint(
                 v,
                 f,
                 camera_py,
@@ -298,3 +298,4 @@ if __name__ == "__main__":
                 mesh_scale=scaling_factor,
                 visualize=True,
             )
+            print(rendered_pc)
