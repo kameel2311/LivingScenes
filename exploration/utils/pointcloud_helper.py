@@ -1,11 +1,9 @@
-# Exploring Point Cloud Utils with ModelNet10
+# Point Cloud Utilities
 import os
-import matplotlib.pyplot as plt
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 import point_cloud_utils as pcu
-
-DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
+import matplotlib.pyplot as plt
+from scipy.spatial.transform import Rotation as R
 
 
 def draw_point_cloud(pointcloud_array, title="", overlay_pointcloud=None):
@@ -277,6 +275,19 @@ def center_pointcloud_v2(pointcloud):
     return pointcloud - average, average
 
 
+def scale_point_cloud(pointcloud, desired_max_dim=30):
+    pointcloud_centered, center = center_pointcloud(pointcloud)
+    radius = np.max(np.linalg.norm(pointcloud_centered, axis=1))
+    scaling_factor = np.round(desired_max_dim / radius, 1)
+
+    # Scaling
+    pointcloud *= scaling_factor
+    pointcloud_centered *= scaling_factor
+    center = np.reshape(center * scaling_factor, (1, 3))
+
+    return pointcloud, pointcloud_centered, center, scaling_factor
+
+
 def generate_random_rotation(pure_z_rotation=False):
     """
     Generate a random 3D rotation matrix (uniformly sampled from SO(3)).
@@ -307,6 +318,7 @@ def rotate_pointcloud_randomly(pointcloud, pure_z_rotation=False):
 
 if __name__ == "__main__":
     # Load Object Instance
+    DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
     object_class = "chair"
     file = "train"
     instance = 100

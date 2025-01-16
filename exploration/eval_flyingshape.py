@@ -270,7 +270,7 @@ def eval_reconstruction(dataset, solver):
 if __name__ == "__main__":
     dataset_path = "/Datasets/FlyingShapes"
     dataset = FlyingShape(dataset_path)
-    ckpt = "weights"
+    ckpt = "../weights"
     solver_cfg = load_yaml("../configs/more_3rscan.yaml")
     set_logger("eval_flyingshape.log")
     solver_cfg["shape_priors"]["ckpt_dir"] = ckpt
@@ -279,6 +279,8 @@ if __name__ == "__main__":
     solver = More_Solver(solver_cfg)
     logging.info(f"------------------------------------")
 
-    eval_matching(dataset, solver)
+    # eval_matching(dataset, solver)
     eval_relocalization(dataset, solver)
-    eval_reconstruction(dataset, solver)
+    # eval_reconstruction(dataset, solver)
+
+    print("Exploring the Dataset: ", dataset)

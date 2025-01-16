@@ -1,10 +1,10 @@
 import numpy as np
 import point_cloud_utils as pcu
-from point_cloud import *
+from exploration.utils.pointcloud_helper import *
 import pyrender
 import trimesh
 import random
-from pyrender_view_render import *
+from exploration.dep.pyrender_view_render import *
 from trimesh.creation import cone
 
 DATA_DIR = "/Datasets/ModelNet10/ModelNet10"

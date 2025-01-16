@@ -1,24 +1,16 @@
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 import pyrender
 import trimesh
 import random
-from point_cloud import (
-    path_generator,
-    sample_mesh_random,
-    center_pointcloud,
-    draw_point_cloud_with_cameras,
-)
-from pyrender_view_render import transformation_matrix, deproject_depth_image
 import point_cloud_utils as pcu
 import matplotlib.pyplot as plt
-
-DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
-
-W_R_C = np.array([[1, 0, 0], [0, 0, 1], [0, 1, 0]])
-PY_R_W = np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]])
-PY_T_W = transformation_matrix(PY_R_W, np.zeros([1, 3]))
-W_T_C = transformation_matrix(W_R_C, np.zeros([1, 3]))
+from scipy.spatial.transform import Rotation as R
+from pointcloud_helper import (
+    path_generator,
+    sample_mesh_random,
+    draw_point_cloud_with_cameras,
+    scale_point_cloud,
+)
 
 
 class Camera:
@@ -39,6 +31,25 @@ class Camera:
 
     def get_intrinsics(self):
         return self.k
+
+
+def transformation_matrix(rotation, translation):
+    """
+    Create a 4x4 transformation matrix from rotation and translation vectors.
+
+    Parameters:
+        rotation (numpy.ndarray): 3x3 rotation matrix.
+        translation (numpy.ndarray): 3x1 translation vector.
+
+    Returns:
+        numpy.ndarray: 4x4 transformation matrix.
+    """
+    # Create a 4x4 transformation matrix
+    transformation = np.eye(4)
+    transformation[:3, :3] = np.reshape(rotation, (3, 3))
+    transformation[:3, 3] = np.reshape(translation, (3,))
+
+    return transformation
 
 
 def sample_points_in_circle(num_points, angle_lower, angle_upper, radius, center):
@@ -79,6 +90,12 @@ def sample_points_in_circle_pySpace(
     camera_centers = (PY_R_W @ np.reshape(center, (3, 1))).T + delta
 
     return camera_centers, theta
+
+
+W_R_C = np.array([[1, 0, 0], [0, 0, 1], [0, 1, 0]])
+PY_R_W = np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]])
+PY_T_W = transformation_matrix(PY_R_W, np.zeros([1, 3]))
+W_T_C = transformation_matrix(W_R_C, np.zeros([1, 3]))
 
 
 def get_circle_poses(
@@ -197,24 +214,45 @@ def render_point_cloud_from_mesh(
     return visible_points
 
 
-def scale_point_cloud(pointcloud, desired_max_dim=30):
-    pointcloud_centered, center = center_pointcloud(pointcloud)
-    radius = np.max(np.linalg.norm(pointcloud_centered, axis=1))
-    scaling_factor = np.round(desired_max_dim / radius, 1)
+def deproject_depth_image(depth, k, y_multipler=1):
+    """
+    Deproject depth image to point cloud
 
-    # Scaling
-    pointcloud *= scaling_factor
-    pointcloud_centered *= scaling_factor
-    center = np.reshape(center * scaling_factor, (1, 3))
+    Args:
+        depth: HxW numpy array of depth values
+        k: 3x3 camera intrinsic matrix
 
-    return pointcloud, pointcloud_centered, center, scaling_factor
+    Returns:
+        point_cloud: Nx3 numpy array of 3D points
+    """
+    # Create grid of pixel coordinates
+    h, w = depth.shape
+    u, v = np.meshgrid(np.arange(w), np.arange(h))
+    u = u.flatten()
+    v = v.flatten()
 
+    # Deproject depth image to 3D points
+    z = depth.flatten()
+    x = (u - k[0, 2]) * z / k[0, 0]
+    y = y_multipler * (v - k[1, 2]) * z / k[1, 1]
+
+    point_cloud = np.stack((x, y, z), axis=1)
+
+    return point_cloud
+
+
+# TODO: Implement Sampling as in Dep.pyrender_view_render (Spherical Sampling)
+
+W_R_C = np.array([[1, 0, 0], [0, 0, 1], [0, 1, 0]])
+PY_R_W = np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]])
+PY_T_W = transformation_matrix(PY_R_W, np.zeros([1, 3]))
+W_T_C = transformation_matrix(W_R_C, np.zeros([1, 3]))
 
 if __name__ == "__main__":
+    DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
     # Load Object Instance
     object_class = "chair"
     file = "train"
-    instance = 1
     for instance in [1]:
         path_to_file = path_generator(DATA_DIR, object_class, file, instance)
 

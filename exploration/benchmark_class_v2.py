@@ -36,9 +36,21 @@ from evaluate import (
     compute_volumetric_iou,
 )
 
-from point_cloud import *
-from benchmark_flyingshapes import *
-from pyrender_view_render import sample_viewpoint
+from utils.metrics_helper import (
+    matrix_fitness_metric,
+    plot_data,
+    plot_rre,
+    matrix_angular_similarity,
+)
+
+from utils.pointcloud_helper import (
+    path_generator,
+    sample_mesh_random,
+    draw_point_cloud,
+    add_gaussian_noise,
+    rotate_pointcloud_randomly,
+)
+from exploration.dep.pyrender_view_render import sample_viewpoint
 
 scale = 1
 image_height = 500 * scale
@@ -55,27 +67,6 @@ cy = image_height / 2
 # cx = image_width / 2
 # cy = image_height / 2
 K = np.array([fx, 0, cx, 0, fy, cy, 0, 0, 1], dtype=np.float32).reshape((3, 3))
-
-
-def plot_rre(rre, labels=None):
-    """
-    Plots historgram of the Rotation Error
-    """
-    n_bins = 20
-    if labels is None:
-        sns.histplot(rre, bins=n_bins, kde=True)
-    else:
-        multipler = len(rre) / len(labels)
-        assert int(multipler) == multipler
-        labels = labels * int(multipler)
-        data = pd.DataFrame({"Rotation Error": rre, "Object Class": labels})
-        sns.histplot(
-            data=data, x="Rotation Error", hue="Object Class", kde=True, bins=n_bins
-        )
-    plt.title("Rotation Error")
-    plt.xlabel("Rotation Error")
-    plt.ylabel("Frequency")
-    plt.show()
 
 
 DATA_DIR = "/Datasets/ModelNet10/ModelNet10"

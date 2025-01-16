@@ -1,6 +1,6 @@
 import numpy as np
 import point_cloud_utils as pcu
-from point_cloud import *
+from exploration.utils.pointcloud_helper import *
 import pyrender
 import trimesh
 import random
@@ -35,8 +35,8 @@ def transformation_matrix(rotation, translation):
     """
     # Create a 4x4 transformation matrix
     transformation = np.eye(4)
-    transformation[:3, :3] = rotation
-    transformation[:3, 3] = translation
+    transformation[:3, :3] = np.reshape(rotation, (3, 3))
+    transformation[:3, 3] = np.reshape(translation, (3,))
 
     return transformation
 
@@ -53,12 +53,32 @@ def points_around_sphere(num_points, radius=1):
     return np.stack((x, y, z), axis=1)
 
 
-def calculate_aligning_rotation(focalpoint, k, image_width, image_height):
-    """Calculate rotation to align camera with focal point/camrea center"""
+# def calculate_aligning_rotation(focalpoint, k, image_width, image_height):
+#     """Calculate rotation to align camera with focal point/camrea center"""
+#     focalpoint = np.reshape(focalpoint, (3))
+#     image_center = np.array([image_width / 2, image_height / 2, 1])
+#     deproj_image_center = np.linalg.inv(k) @ image_center * 1
+#     rotation = find_rotation(deproj_image_center, -1 * focalpoint)
+#     return rotation
+
+
+def calculate_aligning_rotation(
+    focalpoint, k, image_width, image_height, c_R_w=np.eye(3)
+):
+    """Calculate rotation to align camera with focal point/camrea center
+    Args:
+        focalpoint: 3D point to align camera with in world coordinates
+        k: 3x3 camera intrinsic matrix
+        image_width: image width
+        image_height: image height
+        c_R_w: rotation matrix from world to camera coordinates"""
+
     focalpoint = np.reshape(focalpoint, (3))
+    focalpoint = (c_R_w @ focalpoint.T).T
     image_center = np.array([image_width / 2, image_height / 2, 1])
     deproj_image_center = np.linalg.inv(k) @ image_center * 1
     rotation = find_rotation(deproj_image_center, -1 * focalpoint)
+    rotation = c_R_w.T @ rotation
     return rotation
 
 
@@ -133,7 +153,7 @@ def render_depth_map(mesh_vertices, mesh_faces, camera_pose):
     return depth
 
 
-def deproject_depth_image(depth, k):
+def deproject_depth_image(depth, k, y_multipler=1):
     """
     Deproject depth image to point cloud
 
@@ -153,7 +173,7 @@ def deproject_depth_image(depth, k):
     # Deproject depth image to 3D points
     z = depth.flatten()
     x = (u - k[0, 2]) * z / k[0, 0]
-    y = (v - k[1, 2]) * z / k[1, 1]
+    y = y_multipler * (v - k[1, 2]) * z / k[1, 1]
 
     point_cloud = np.stack((x, y, z), axis=1)
 
