@@ -1,6 +1,6 @@
 import numpy as np
 import point_cloud_utils as pcu
-from point_cloud import *
+from exploration.utils.pointcloud_helper import *
 from scipy.spatial.transform import Rotation as R
 from mpl_toolkits.mplot3d import Axes3D
 

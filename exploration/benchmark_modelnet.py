@@ -3,17 +3,27 @@ Comparing Object Instances from the same class and different classes
 """
 
 import sys
+from utils.metrics_helper import (
+    matrix_fitness_metric,
+    plot_data,
+    plot_rre,
+    matrix_angular_similarity,
+)
+
+from utils.pointcloud_helper import (
+    path_generator,
+    sample_mesh_random,
+    draw_point_cloud,
+    add_gaussian_noise,
+    rotate_pointcloud_randomly,
+)
 
 sys.path.append("../")
 
-import os, sys, yaml, shutil
-import glob
 import torch
 import numpy as np
 import pandas as pd
-import os.path as osp
 from lib_math import torch_se3
-import trimesh
 import point_cloud_utils as pcu
 from pytorch3d.ops import sample_farthest_points as fps
 from tqdm import tqdm
@@ -22,7 +32,6 @@ from lib_more.pose_estimation import kabsch_transformation_estimation, rotation_
 
 from lib_more.pose_estimation import *
 from pycg import vis
-import logging, coloredlogs
 from lib_more.utils import (
     read_list_from_txt,
     load_json,
@@ -35,30 +44,6 @@ from evaluate import (
     compute_sdf_recall,
     compute_volumetric_iou,
 )
-
-from point_cloud import *
-from benchmark_flyingshapes import *
-
-
-def plot_rre(rre, labels=None):
-    """
-    Plots historgram of the Rotation Error
-    """
-    n_bins = 20
-    if labels is None:
-        sns.histplot(rre, bins=n_bins, kde=True)
-    else:
-        multipler = len(rre) / len(labels)
-        assert int(multipler) == multipler
-        labels = labels * int(multipler)
-        data = pd.DataFrame({"Rotation Error": rre, "Object Class": labels})
-        sns.histplot(
-            data=data, x="Rotation Error", hue="Object Class", kde=True, bins=n_bins
-        )
-    plt.title("Rotation Error")
-    plt.xlabel("Rotation Error")
-    plt.ylabel("Frequency")
-    plt.show()
 
 
 DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
@@ -75,11 +60,6 @@ if __name__ == "__main__":
     solver = More_Solver(solver_cfg)
     model = solver.model
 
-    # Variable Declarations
-    dataset_diagonal_mean = []
-    dataset_off_diagonal_mean = []
-    dataset_off_diagonal_std = []
-
     # Benchmark Iterations
     object_classes = ["chair", "table", "monitor", "sofa"]
     pc_count = 600
@@ -90,7 +70,8 @@ if __name__ == "__main__":
     dataset_off_diagonal_mean = []
     dataset_off_diagonal_std = []
     rotational_errors = []
-    for idx in range(1, object_index_limit):
+    # for idx in range(1, object_index_limit):
+    for idx in [1, 2, 4, 6, 7, 8]:
         # Load Object Instance
         object_meshes = []
         for object_class in object_classes:
@@ -102,7 +83,8 @@ if __name__ == "__main__":
             ref_object_pointclouds = []
             rescan_object_pointclouds = []
             gt_rotation = []
-            for v, f in object_meshes:
+            for i, (v, f) in enumerate(object_meshes):
+                print(f"Object: ", {object_classes[i]}, " index: ", idx)
                 pointcloud = sample_mesh_random(v, f, num_samples=pc_count)
                 pointcloud = add_gaussian_noise(pointcloud, sigma=0.5)
                 ref_object_pointclouds.append(pointcloud)
@@ -126,8 +108,8 @@ if __name__ == "__main__":
                 .transpose(-1, -2)
             )
 
-            # print(ref_object_pointclouds.shape)
-            # print(rescan_object_pointclouds.shape)
+            print(ref_object_pointclouds.shape)
+            print(rescan_object_pointclouds.shape)
 
             with torch.no_grad():
                 ref_code = model.encode(ref_object_pointclouds)

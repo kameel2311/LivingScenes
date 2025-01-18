@@ -34,7 +34,7 @@ from evaluate import (
     compute_volumetric_iou,
 )
 
-from point_cloud import *
+from exploration.utils.pointcloud_helper import *
 
 
 def set_logger(log_path):

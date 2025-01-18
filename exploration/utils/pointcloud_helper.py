@@ -1,12 +1,15 @@
-# Exploring Point Cloud Utils with ModelNet10
-import point_cloud_utils as pcu
+# Point Cloud Utilities
 import os
-import matplotlib.pyplot as plt
 import numpy as np
+import point_cloud_utils as pcu
+import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 
+from math import log10, floor
 
-DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
+
+def round_to_1(x):
+    return round(x, -int(floor(log10(abs(x)))))
 
 
 def draw_point_cloud(pointcloud_array, title="", overlay_pointcloud=None):
@@ -35,18 +38,19 @@ def draw_point_cloud(pointcloud_array, title="", overlay_pointcloud=None):
     ax.set_xlabel("X Axis")
     ax.set_ylabel("Y Axis")
     ax.set_zlabel("Z Axis")
+    ax.set_aspect("equal", adjustable="box")
     plt.title(title)
     plt.show()
 
 
-def draw_camera(ax, K, image_size, pose, scale=1.0, color="blue"):
+def draw_camera(ax, K, image_size, pose, scale=1.0):
     """
     Draws a camera frustum in 3D using its intrinsics and pose.
 
     Parameters:
         ax (mpl_toolkits.mplot3d.Axes3D): The Matplotlib 3D axis to draw on.
         K (numpy.ndarray): 3x3 camera intrinsics matrix.
-        pose (numpy.ndarray): 4x4 camera pose matrix (world to camera transformation).
+        pose (numpy.ndarray): 4x4 camera pose matrix w_T_c.
         scale (float): Scaling factor for the frustum size.
         color (str): Color of the frustum lines.
     """
@@ -79,13 +83,15 @@ def draw_camera(ax, K, image_size, pose, scale=1.0, color="blue"):
     world_corners = world_corners[:3, :].T
     world_cam_center = world_cam_center[:3]
 
+    colours = ["red", "green", "blue", "yellow"]
+
     # Draw frustum edges
     for i in range(4):
         ax.plot(
             [world_cam_center[0], world_corners[i, 0]],
             [world_cam_center[1], world_corners[i, 1]],
             [world_cam_center[2], world_corners[i, 2]],
-            color=color,
+            color=colours[i],
         )
 
     # Draw image plane edges
@@ -95,7 +101,7 @@ def draw_camera(ax, K, image_size, pose, scale=1.0, color="blue"):
             [world_corners[i, 0], world_corners[j, 0]],
             [world_corners[i, 1], world_corners[j, 1]],
             [world_corners[i, 2], world_corners[j, 2]],
-            color=color,
+            color=colours[i],
         )
 
 
@@ -135,7 +141,7 @@ def draw_point_cloud_with_cameras(
 
     if cameras:
         for K, image_size, pose in cameras:
-            draw_camera(ax, K, image_size, pose, scale=1, color="green")
+            draw_camera(ax, K, image_size, pose, scale=1)
             ax.scatter(
                 pose[0, 3],
                 pose[1, 3],
@@ -148,6 +154,7 @@ def draw_point_cloud_with_cameras(
     ax.set_xlabel("X Axis")
     ax.set_ylabel("Y Axis")
     ax.set_zlabel("Z Axis")
+    ax.set_aspect("equal", adjustable="box")
     plt.title(title)
     plt.show()
     return fig, ax
@@ -260,7 +267,8 @@ def center_pointcloud(pointcloud):
     """
     Center the point cloud at the origin
     """
-    return pointcloud - np.mean(pointcloud, axis=0)
+    center = np.mean(pointcloud, axis=0)
+    return pointcloud - center, center
 
 
 def center_pointcloud_v2(pointcloud):
@@ -271,6 +279,34 @@ def center_pointcloud_v2(pointcloud):
     maximum = np.max(pointcloud, axis=0)
     average = (minimium + maximum) / 2
     return pointcloud - average, average
+
+
+def scale_point_cloud(pointcloud, inference_method=False, desired_max_dim=30):
+    pointcloud_centered, center = center_pointcloud(pointcloud)
+    if not inference_method:
+        radius = np.max(np.linalg.norm(pointcloud_centered, axis=1))
+        scaling_factor = round_to_1(desired_max_dim / radius)
+    else:
+        # TODO: FIX THIS DOES NOT WORK
+        dist = np.linalg.norm(
+            pointcloud_centered[:, np.newaxis, :]
+            - pointcloud_centered[np.newaxis, :, :],
+            axis=-1,
+        )
+
+        # Flatten the distance matrix, sort the distances, and take the top 5 for each point
+        scaling_factor = np.mean(
+            np.sort(dist, axis=-1)[:, 1:6], axis=-1
+        )  # Exclude self-distance (0) for the top 5
+        scaling_factor = scaling_factor[:, None, None]
+        print(scaling_factor.shape)
+
+    # Scaling
+    pointcloud *= scaling_factor
+    pointcloud_centered *= scaling_factor
+    center = np.reshape(center * scaling_factor, (1, 3))
+
+    return pointcloud, pointcloud_centered, center, scaling_factor
 
 
 def generate_random_rotation(pure_z_rotation=False):
@@ -293,16 +329,20 @@ def generate_random_rotation(pure_z_rotation=False):
     return rotation_matrix
 
 
-def rotate_pointcloud_randomly(pointcloud, pure_z_rotation=False):
+def rotate_pointcloud_randomly(pointcloud, pure_z_rotation=False, identity=False):
     """
     Rotate the point cloud using the rotation matrix
     """
     rotation_matrix = generate_random_rotation(pure_z_rotation)
-    return (rotation_matrix @ pointcloud.T).T, rotation_matrix
+    if not identity:
+        return (rotation_matrix @ pointcloud.T).T, rotation_matrix
+    else:
+        return pointcloud, np.eye(3)
 
 
 if __name__ == "__main__":
     # Load Object Instance
+    DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
     object_class = "chair"
     file = "train"
     instance = 100
