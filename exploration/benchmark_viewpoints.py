@@ -8,6 +8,8 @@ from utils.metrics_helper import (
     plot_data,
     plot_rre,
     matrix_angular_similarity,
+    plot_correlation,
+    compute_pointcloud_overlap,
 )
 
 from utils.pointcloud_helper import (
@@ -55,10 +57,11 @@ DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
 FOLDER = "train"
 NUM_VIEWPOINTS = 4
 VISUALIZE = False
+object_index_limit = 100
 
 # Sampling Options
-MIN_ANGLE = 0
-MAX_ANGLE = 360
+MIN_ANGLE = -120
+MAX_ANGLE = 120
 PC_COUNT = 600
 SEQUENTIAL = False
 
@@ -74,8 +77,7 @@ if __name__ == "__main__":
 
     # Benchmark Iterations
     object_classes = ["chair", "table", "monitor", "sofa"]
-
-    object_index_limit = 100
+    # object_classes = ["sofa"]
 
     # Variable Declarations
     dataset_diagonal_mean = []
@@ -83,16 +85,21 @@ if __name__ == "__main__":
     dataset_off_diagonal_std = []
     rotational_errors = []
 
+    # Point Cloud Distance Metric
+    dataset_champfer_distance = []
+    dataset_overlap_ratio = []
+    dataset_object_labels = []
+
     # Viewpoint Sampling Camera
     image_height = 500
     image_width = 500
     camera = Camera(
-        scale=1, image_height=image_height, image_width=image_width, fx=400, fy=400
+        scale=1, image_height=image_height, image_width=image_width, fx=250, fy=250
     )
     k = camera.get_intrinsics()
     camera_py = camera.get_pyrender_camera()
 
-    for idx in range(3, object_index_limit):
+    for idx in range(1, object_index_limit):
         # for idx in [1]:
         object_meshes = []
         object_rendering_info = []
@@ -104,9 +111,9 @@ if __name__ == "__main__":
             object_meshes.append((v, f))
             pointcloud = sample_mesh_random(v, f, num_samples=PC_COUNT)
             pointcloud, pointcloud_centered, center, scaling_factor = scale_point_cloud(
-                pointcloud
+                pointcloud, inference_method=False, desired_max_dim=10
             )
-            radius = np.max(np.linalg.norm(pointcloud_centered, axis=1)) * 1.0
+            radius = np.max(np.linalg.norm(pointcloud_centered, axis=1)) * 1.5
             world_pose, pyrender_pose = get_circle_poses(
                 NUM_VIEWPOINTS,
                 MIN_ANGLE,
@@ -129,7 +136,7 @@ if __name__ == "__main__":
                     ref_obj_idx
                 ]
                 v, f = object_meshes[ref_obj_idx]
-                pointcloud = render_point_cloud_from_viewpoint(
+                ref_pointcloud = render_point_cloud_from_viewpoint(
                     v,
                     f,
                     camera_py,
@@ -143,12 +150,12 @@ if __name__ == "__main__":
                     visualize=VISUALIZE,
                 )
 
-                # pointcloud = add_gaussian_noise(pointcloud, sigma=0.5)
-                ref_object_pointclouds.append(pointcloud)
+                ref_pointcloud = add_gaussian_noise(ref_pointcloud, sigma=0.2)
+                ref_object_pointclouds.append(ref_pointcloud)
                 # draw_point_cloud(pointcloud)
 
                 # Render Viewpoints for Rescan Object
-                pointcloud = render_point_cloud_from_viewpoint(
+                rescan_pointcloud = render_point_cloud_from_viewpoint(
                     v,
                     f,
                     camera_py,
@@ -161,14 +168,36 @@ if __name__ == "__main__":
                     mesh_scale=scaling_factor,
                     visualize=VISUALIZE,
                 )
+                # Log PointCloud Distance Metric
+                champfer_distance = pcu.chamfer_distance(
+                    np.array(ref_pointcloud, order="C"),
+                    np.array(rescan_pointcloud, order="C"),
+                )
+                overlap = compute_pointcloud_overlap(
+                    ref_pointcloud,
+                    rescan_pointcloud,
+                    epsilon=min(champfer_distance, 1.0),
+                )
+                dataset_overlap_ratio.append(overlap)
+                dataset_champfer_distance.append(champfer_distance)
+                dataset_object_labels.append(object_classes[ref_obj_idx])
 
-                # pointcloud, rot_matrix = rotate_pointcloud_randomly(
-                #     pointcloud, pure_z_rotation=True
-                # )
-                # pointcloud = add_gaussian_noise(pointcloud, sigma=0.2)
-                rescan_object_pointclouds.append(pointcloud)
-                # gt_rotation.append(torch.tensor(rot_matrix))
-            # gt_rotation = torch.stack(gt_rotation)
+                # Add Noise and Rotation
+                rescan_pointcloud, rot_matrix = rotate_pointcloud_randomly(
+                    rescan_pointcloud, pure_z_rotation=True, identity=True
+                )
+                rescan_pointcloud = add_gaussian_noise(rescan_pointcloud, sigma=0.2)
+                rescan_object_pointclouds.append(rescan_pointcloud)
+                gt_rotation.append(torch.tensor(rot_matrix))
+
+                # Debugging
+                if VISUALIZE:
+                    print("Champfer Distance: ", champfer_distance)
+                    print("Overlap Ratio: ", overlap)
+                    draw_point_cloud(
+                        ref_pointcloud, overlay_pointcloud=rescan_pointcloud
+                    )
+            gt_rotation = torch.stack(gt_rotation)
 
             ref_object_pointclouds = (
                 torch.tensor(np.array(ref_object_pointclouds)).cuda().transpose(-1, -2)
@@ -188,27 +217,73 @@ if __name__ == "__main__":
 
             ref_code_invariant = ref_code["z_inv"]
             rescan_code_invariant = rescan_code["z_inv"]
-            # ref_code_se3 = ref_code["z_so3"] + ref_code["t"]
-            # rescan_code_se3 = rescan_code["z_so3"] + rescan_code["t"]
+            ref_code_se3 = ref_code["z_so3"] + ref_code["t"]
+            rescan_code_se3 = rescan_code["z_so3"] + rescan_code["t"]
 
             # compute the similarity matrix
             score_mat = matrix_angular_similarity(
                 ref_code_invariant, rescan_code_invariant
             )
 
-            diag_mean, off_diag_mean, off_diag_std = matrix_fitness_metric(score_mat)
+            diag_mean, off_diag_mean, off_diag_std = matrix_fitness_metric(
+                score_mat, average_along_matrix=False
+            )
+            print("Servus: ", diag_mean, off_diag_mean, off_diag_std)
             dataset_diagonal_mean.append(diag_mean)
             dataset_off_diagonal_mean.append(off_diag_mean)
-            dataset_off_diagonal_std.append(off_diag_std)
+            dataset_off_diagonal_std.append(off_diag_std.cpu())
 
-            # # Compute the relative transformation matrix
-            # R, t, _, _ = kabsch_transformation_estimation(ref_code_se3, rescan_code_se3)
-            # rres = rotation_error(R, gt_rotation.cuda())
-            # rres = rres.cpu().numpy()
-            # for rre in rres:
-            #     rotational_errors.append(rre[0])
+            # Compute the relative transformation matrix
+            R, t, _, _ = kabsch_transformation_estimation(ref_code_se3, rescan_code_se3)
+            rres = rotation_error(R, gt_rotation.cuda())
+            rres = rres.cpu().numpy()
+            # print(rres)
+            for rre in rres:
+                rotational_errors.append(rre[0])
+
+    # Flatten the Data
+    dataset_diagonal_mean = np.array(dataset_diagonal_mean).flatten()
+    dataset_off_diagonal_mean = np.array(dataset_off_diagonal_mean).flatten()
+    dataset_off_diagonal_std = np.array(dataset_off_diagonal_std).flatten()
 
     plot_data(
         dataset_diagonal_mean, dataset_off_diagonal_mean, dataset_off_diagonal_std
     )
-    # plot_rre(rotational_errors, labels=object_classes)
+    plot_rre(rotational_errors, labels=object_classes)
+
+    plot_correlation(
+        dataset_champfer_distance,
+        dataset_diagonal_mean,
+        "Chamfer",
+        "Diagonal Mean",
+        labels=dataset_object_labels,
+    )
+    plot_correlation(
+        dataset_champfer_distance,
+        rotational_errors,
+        "Chamfer",
+        "Rotation Error",
+        labels=dataset_object_labels,
+    )
+    plot_correlation(
+        dataset_diagonal_mean,
+        rotational_errors,
+        "Diagonal Values",
+        "Rotation Error",
+        labels=dataset_object_labels,
+    )
+
+    plot_correlation(
+        dataset_overlap_ratio,
+        dataset_diagonal_mean,
+        "Overlap",
+        "Diagonal Mean",
+        labels=dataset_object_labels,
+    )
+    plot_correlation(
+        dataset_overlap_ratio,
+        rotational_errors,
+        "Overlap",
+        "Rotation Error",
+        labels=dataset_object_labels,
+    )

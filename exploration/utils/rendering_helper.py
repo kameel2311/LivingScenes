@@ -1,6 +1,7 @@
 import sys
 
 sys.path.append("../")
+from utils.metrics_helper import compute_pointcloud_overlap
 import numpy as np
 import pyrender
 import trimesh
@@ -11,6 +12,7 @@ from scipy.spatial.transform import Rotation as R
 from utils.pointcloud_helper import (
     path_generator,
     sample_mesh_random,
+    draw_point_cloud,
     draw_point_cloud_with_cameras,
     scale_point_cloud,
 )
@@ -19,8 +21,8 @@ from utils.pointcloud_helper import (
 class Camera:
     def __init__(self, scale, image_height, image_width, fx, fy):
         self.scale = scale
-        self.image_height = image_height
-        self.image_width = image_width
+        self.image_height = image_height  # * scale
+        self.image_width = image_width  # * scale
         self.fx = fx / scale
         self.fy = fy / scale
         self.cx = self.image_width / 2
@@ -261,53 +263,103 @@ W_T_C = transformation_matrix(W_R_C, np.zeros([1, 3]))
 if __name__ == "__main__":
     DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
     # Load Object Instance
-    object_class = "chair"
     file = "train"
 
     # Define Camera
     image_height = 500
     image_width = 500
     camera = Camera(
-        scale=1, image_height=image_height, image_width=image_width, fx=400, fy=400
+        scale=1, image_height=image_height, image_width=image_width, fx=250, fy=250
     )
     k = camera.get_intrinsics()
     num_cameras = 5
 
     # Loop through the instances
-    for instance in [3]:
-        path_to_file = path_generator(DATA_DIR, object_class, file, instance)
+    # for object_class in ["chair", "table", "monitor", "sofa"]:
+    for object_class in ["sofa"]:
+        # Champfer Distance
+        mean_objects_champfer_distance = []
+        for instance in range(1, 100):
+            # for instance in [11]:
+            path_to_file = path_generator(DATA_DIR, object_class, file, instance)
 
-        # Load vertices and faces
-        v, f = pcu.load_mesh_vf(path_to_file)
+            # Load vertices and faces
+            v, f = pcu.load_mesh_vf(path_to_file)
 
-        # Sample points from mesh
-        pointcloud = sample_mesh_random(v, f, num_samples=600)
-        pointcloud, pointcloud_centered, center, scaling_factor = scale_point_cloud(
-            pointcloud
-        )
-
-        # Camera Poses
-
-        radius = np.max(np.linalg.norm(pointcloud_centered, axis=1)) * 1
-        world_pose, pyrender_pose = get_circle_poses(5, 0, 120, radius, center)
-
-        # Loading Mesh and Setup Camera
-        camera_py = camera.get_pyrender_camera()
-        renderer = pyrender.OffscreenRenderer(image_width, image_height)
-
-        # Loop through the camera poses
-        for i in range(num_cameras):
-            rendered_pc = render_point_cloud_from_viewpoint(
-                v,
-                f,
-                camera_py,
-                k,
-                image_width,
-                image_height,
-                600,
-                world_pose[i],
-                pyrender_pose[i],
-                mesh_scale=scaling_factor,
-                visualize=True,
+            # Sample points from mesh
+            pointcloud = sample_mesh_random(v, f, num_samples=600)
+            pointcloud, pointcloud_centered, center, scaling_factor = scale_point_cloud(
+                pointcloud, inference_method=False, desired_max_dim=10
             )
-            print(rendered_pc)
+            print("Scaling Factor: ", scaling_factor)
+
+            # Camera Poses
+            radius = np.max(np.linalg.norm(pointcloud_centered, axis=1)) * 1.5
+            world_pose, pyrender_pose = get_circle_poses(5, 0, 120, radius, center)
+
+            # Loading Mesh and Setup Camera
+            camera_py = camera.get_pyrender_camera()
+            renderer = pyrender.OffscreenRenderer(image_width, image_height)
+
+            # Loop through the camera poses
+            temp_distance = []
+            for i in range(num_cameras):
+                rendered_pc = render_point_cloud_from_viewpoint(
+                    v,
+                    f,
+                    camera_py,
+                    k,
+                    image_width,
+                    image_height,
+                    600,
+                    world_pose[i],
+                    pyrender_pose[i],
+                    mesh_scale=scaling_factor,
+                    visualize=False,
+                )
+                if i != 0:
+                    champfer_distance = pcu.chamfer_distance(
+                        np.array(rendered_pc, order="C"),
+                        np.array(prev_pointcloud, order="C"),
+                    )
+                    overlap = compute_pointcloud_overlap(
+                        rendered_pc, prev_pointcloud, epsilon=champfer_distance
+                    )
+                    print(
+                        f"Chamfer Distance between {i} and {i-1}: ", champfer_distance
+                    )
+                    print(f"Overlap Ratio between {i} and {i-1}: ", overlap)
+                    draw_point_cloud(rendered_pc, overlay_pointcloud=prev_pointcloud)
+                    prev_pointcloud = rendered_pc
+                    temp_distance.append(champfer_distance)
+                else:
+                    prev_pointcloud = rendered_pc
+            mean_objects_champfer_distance.append(np.mean(temp_distance))
+            print(f"Mean {instance} Champfer Distance: ", np.mean(temp_distance))
+
+        # Plot Champfer Distance of Object
+        plt.plot(mean_objects_champfer_distance, label=object_class)
+    plt.xlabel("Object Instance")
+    plt.ylabel("Champfer Distance")
+    plt.title("Champfer Distance of Object Instances")
+    plt.legend()
+    plt.show()
+
+    # # Compare Metrics
+    # for i in range(len(sampled_pointclouds) - 1):
+    #     champfer_distance = pcu.chamfer_distance(
+    #         np.array(sampled_pointclouds[i], order="C"),
+    #         np.array(sampled_pointclouds[i + 1], order="C"),
+    #     )
+    #     print(f"Chamfer Distance between {i} and {i+1}: ", champfer_distance)
+    #     draw_point_cloud(
+    #         sampled_pointclouds[i], overlay_pointcloud=sampled_pointclouds[i + 1]
+    #     )
+
+    #     # Distance wrt to full point cloud
+    #     champfer_distance = pcu.chamfer_distance(
+    #         np.array(pointcloud, order="C"),
+    #         np.array(sampled_pointclouds[i], order="C"),
+    #     )
+    #     print(f"Chamfer Distance between Origial and {i}: ", champfer_distance)
+    #     draw_point_cloud(pointcloud, overlay_pointcloud=sampled_pointclouds[i])

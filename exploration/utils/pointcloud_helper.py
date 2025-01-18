@@ -281,10 +281,25 @@ def center_pointcloud_v2(pointcloud):
     return pointcloud - average, average
 
 
-def scale_point_cloud(pointcloud, desired_max_dim=30):
+def scale_point_cloud(pointcloud, inference_method=False, desired_max_dim=30):
     pointcloud_centered, center = center_pointcloud(pointcloud)
-    radius = np.max(np.linalg.norm(pointcloud_centered, axis=1))
-    scaling_factor = round_to_1(desired_max_dim / radius)
+    if not inference_method:
+        radius = np.max(np.linalg.norm(pointcloud_centered, axis=1))
+        scaling_factor = round_to_1(desired_max_dim / radius)
+    else:
+        # TODO: FIX THIS DOES NOT WORK
+        dist = np.linalg.norm(
+            pointcloud_centered[:, np.newaxis, :]
+            - pointcloud_centered[np.newaxis, :, :],
+            axis=-1,
+        )
+
+        # Flatten the distance matrix, sort the distances, and take the top 5 for each point
+        scaling_factor = np.mean(
+            np.sort(dist, axis=-1)[:, 1:6], axis=-1
+        )  # Exclude self-distance (0) for the top 5
+        scaling_factor = scaling_factor[:, None, None]
+        print(scaling_factor.shape)
 
     # Scaling
     pointcloud *= scaling_factor
@@ -314,12 +329,15 @@ def generate_random_rotation(pure_z_rotation=False):
     return rotation_matrix
 
 
-def rotate_pointcloud_randomly(pointcloud, pure_z_rotation=False):
+def rotate_pointcloud_randomly(pointcloud, pure_z_rotation=False, identity=False):
     """
     Rotate the point cloud using the rotation matrix
     """
     rotation_matrix = generate_random_rotation(pure_z_rotation)
-    return (rotation_matrix @ pointcloud.T).T, rotation_matrix
+    if not identity:
+        return (rotation_matrix @ pointcloud.T).T, rotation_matrix
+    else:
+        return pointcloud, np.eye(3)
 
 
 if __name__ == "__main__":

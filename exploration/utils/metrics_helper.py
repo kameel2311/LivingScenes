@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import seaborn as sns
 import pandas as pd
+from scipy.spatial import cKDTree
 
 
 def angular_similarity(a, b):
@@ -29,7 +30,7 @@ def matrix_angular_similarity(a, b):
     return similarity / norm_matrix
 
 
-def matrix_fitness_metric(similarity_matrix):
+def matrix_fitness_metric(similarity_matrix, average_along_matrix=True):
     # Ensure the input is a tensor
     if isinstance(similarity_matrix, np.ndarray):
         similarity_matrix = torch.tensor(similarity_matrix)
@@ -68,7 +69,14 @@ def matrix_fitness_metric(similarity_matrix):
     off_diag_std = np.mean(off_diag_stds)
     diag_mean = similarity_matrix.diag().mean().item()
 
-    return diag_mean, off_diag_mean, off_diag_std
+    if average_along_matrix:
+        return diag_mean, off_diag_mean, off_diag_std
+    else:
+        return (
+            off_diag_means,
+            off_diag_stds,
+            similarity_matrix.diag(),
+        )
 
 
 def plot_data(
@@ -149,3 +157,68 @@ def plot_rre(rre, labels=None):
     plt.xlabel("Rotation Error")
     plt.ylabel("Frequency")
     plt.show()
+
+
+def plot_correlation(x, y, x_label, y_label, labels=None):
+    # Example data
+    data = {
+        "x_values": x,
+        "y_values": y,
+        "labels": labels if labels is not None else "default",
+    }
+
+    # Create a scatter plot
+    sns.scatterplot(
+        x="x_values", y="y_values", hue="labels", data=data, palette="tab10"
+    )
+
+    # Add labels
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.title(f"Scatter Plot of {x_label} vs {y_label}")
+
+    if labels is not None:
+        plt.legend(title="Labels", loc="best")
+    else:
+        plt.legend().set_visible(False)
+
+    # Show the plot
+    plt.show()
+
+
+def compute_pointcloud_overlap(pc1, pc2, epsilon):
+    """
+    Compute the overlap between two point clouds.
+
+    Args:
+        pc1 (np.ndarray): First point cloud, shape (n1, 3).
+        pc2 (np.ndarray): Second point cloud, shape (n2, 3).
+        epsilon (float): Distance threshold for overlap.
+
+    Returns:
+        float: Overlap ratio (number of overlapping points / total points in pc1).
+    """
+    # Build a KDTree for the second point cloud
+    tree = cKDTree(pc2)
+
+    # Query the KDTree with the first point cloud
+    distances, _ = tree.query(pc1, k=1)  # k=1 finds the nearest neighbor
+
+    # Count points in pc1 that have a neighbor within epsilon in pc2
+    num_overlapping_points_1_in_2 = np.sum(distances <= epsilon)
+
+    # Count points in pc2 that have a neighbor within epsilon in pc1
+    tree = cKDTree(pc1)
+    distances, _ = tree.query(pc2, k=1)
+    num_overlapping_points_2_in_1 = np.sum(distances <= epsilon)
+
+    # Calculate mean number of overlapping points
+    mean_overlapping_points = (
+        num_overlapping_points_1_in_2 + num_overlapping_points_2_in_1
+    ) / 2
+
+    # Calculate overlap ratio
+    overlap_ratio = mean_overlapping_points / (
+        len(pc1) + len(pc2) - mean_overlapping_points
+    )
+    return overlap_ratio
