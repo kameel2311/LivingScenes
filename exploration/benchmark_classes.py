@@ -58,11 +58,13 @@ class Dataloader:
         if self.dataset == "ModelNet10":
             self.data_dir = "/Datasets/ModelNet10/ModelNet10"
             self.folder = "train"
+            self.noise = 0.5
 
         elif self.dataset == "Idealworks":
             self.data_dir = "/Datasets/Idealworks_assests"
             self.folder = ""
             self.object_idx_limit = 1  # Because there is only one object per class
+            self.noise = 0.05
         else:
             raise ValueError("Invalid dataset")
 
@@ -74,10 +76,14 @@ class Dataloader:
         else:
             raise ValueError("Invalid dataset")
 
+    def get_metadata(self):
+        return self.object_classes, self.object_idx_limit, self.noise
+
 
 NUM_ITERATIONS = 10
 MAX_IDX = 100
 PC_COUNT = 600
+VISUALIZE = True
 
 if __name__ == "__main__":
     torch.set_default_dtype(torch.float64)
@@ -91,8 +97,24 @@ if __name__ == "__main__":
 
     # Benchmark Iterations
     dataloader = Dataloader("Idealworks", MAX_IDX)  # "ModelNet10" or "Idealworks"
-    object_classes = dataloader.object_classes
-    object_index_limit = dataloader.object_idx_limit
+    object_classes, object_index_limit, noise_std = dataloader.get_metadata()
+
+    # object_classes = [
+    #     "pallet_1",
+    #     "pallet_2",
+    #     "cone_2",
+    #     "bin",
+    #     "cone_1",
+    #     "klt",
+    #     "rack_boxes",
+    #     "wooden_crate",
+    #     "purple_container",
+    #     "table",
+    #     "Ru2_Dolly",
+    #     "glt",
+    #     "wet_floor_sign",
+    #     "wet_floor_sign_2",
+    # ]
 
     # Console Output
     print(f"Object Classes: {object_classes}")
@@ -119,15 +141,17 @@ if __name__ == "__main__":
             for i, (v, f) in enumerate(object_meshes):
                 print(f"Object: ", {object_classes[i]}, " index: ", idx)
                 pointcloud = sample_mesh_random(v, f, num_samples=PC_COUNT)
-                pointcloud = add_gaussian_noise(pointcloud, sigma=0.5)
+                pointcloud = add_gaussian_noise(pointcloud, sigma=noise_std)
                 ref_object_pointclouds.append(pointcloud)
-                # draw_point_cloud(pointcloud)
+
+                if VISUALIZE:
+                    draw_point_cloud(pointcloud)
 
                 pointcloud = sample_mesh_random(v, f, num_samples=PC_COUNT)
                 pointcloud, rot_matrix = rotate_pointcloud_randomly(
                     pointcloud, pure_z_rotation=True
                 )
-                pointcloud = add_gaussian_noise(pointcloud, sigma=0.2)
+                pointcloud = add_gaussian_noise(pointcloud, sigma=noise_std)
                 # draw_point_cloud(pointcloud)
                 rescan_object_pointclouds.append(pointcloud)
                 gt_rotation.append(torch.tensor(rot_matrix))
