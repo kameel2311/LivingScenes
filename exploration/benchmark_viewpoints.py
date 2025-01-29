@@ -60,10 +60,10 @@ VISUALIZE = False
 object_index_limit = 100
 
 # Sampling Options
-MIN_ANGLE = 0
-MAX_ANGLE = 360
+MIN_ANGLE = -120
+MAX_ANGLE = 120
 PC_COUNT = 600
-SEQUENTIAL = False
+SEQUENTIAL = True
 
 if __name__ == "__main__":
     torch.set_default_dtype(torch.float64)
@@ -76,8 +76,19 @@ if __name__ == "__main__":
     model = solver.model
 
     # Benchmark Iterations
-    object_classes = ["chair", "table", "monitor", "sofa"]
-    # object_classes = ["sofa"]
+    # object_classes = ["chair", "table", "monitor", "sofa"]
+    object_classes = [
+        "bathtub",
+        "bed",
+        "chair",
+        "desk",
+        "dresser",
+        "monitor",
+        "night_stand",
+        "sofa",
+        "table",
+        "toilet",
+    ]
 
     # Variable Declarations
     dataset_diagonal_mean = []

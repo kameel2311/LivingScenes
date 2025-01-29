@@ -80,7 +80,10 @@ def matrix_fitness_metric(similarity_matrix, average_along_matrix=True):
 
 
 def plot_data(
-    dataset_diagonal_mean, dataset_off_diagonal_mean, dataset_off_diagonal_std
+    dataset_diagonal_mean,
+    dataset_off_diagonal_mean,
+    dataset_off_diagonal_std,
+    class_title=None,
 ):
     """
     Plots histograms with density curves for diagonal mean, off-diagonal mean, and std.
@@ -125,6 +128,58 @@ def plot_data(
         alpha=0.6,
         stat="density",
     )
+
+    # Add labels and title
+    plt.xlabel("Values")
+    plt.ylabel("Density")
+    if class_title is not None:
+        plt.title(f"Histogram and Density of Matrix Fitness Metrics for {class_title}")
+    else:
+        plt.title("Histogram and Density of Matrix Fitness Metrics")
+    plt.legend()
+    plt.grid(axis="y", alpha=0.3)
+    plt.tight_layout()
+
+    # Show the plot
+    plt.show()
+
+
+# TODO: Optimize plotting functions
+def plot_dataset(
+    dataset_diagonal_mean,
+    dataset_off_diagonal_mean,
+    dataset_off_diagonal_std,
+):
+    plt.figure(figsize=(10, 6))
+    # Generate a color palette with enough unique colors for the number of keys
+    keys = list(dataset_diagonal_mean.keys())
+    palette = sns.color_palette("husl", len(keys))
+
+    for i, key in enumerate(keys):
+        color = palette[i]  # Assign a unique color for each key
+
+        # Histogram with density curve for off-diagonal means
+        sns.histplot(
+            dataset_off_diagonal_mean[key],
+            bins=10,
+            kde=True,
+            color=color,
+            label=f"Off-Diagonal Means ({key})",
+            alpha=0.6,
+            stat="density",
+            linestyle="dashed",  # Different line style to distinguish them
+        )
+
+        # Histogram with density curve for diagonal means
+        sns.histplot(
+            dataset_diagonal_mean[key],
+            bins=10,
+            kde=True,
+            color=color,
+            label=f"Diagonal Means ({key})",
+            alpha=0.6,
+            stat="density",
+        )
 
     # Add labels and title
     plt.xlabel("Values")

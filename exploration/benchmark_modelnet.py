@@ -61,7 +61,19 @@ if __name__ == "__main__":
     model = solver.model
 
     # Benchmark Iterations
-    object_classes = ["chair", "table", "monitor", "sofa"]
+    # object_classes = ["chair", "table", "monitor", "sofa"]
+    object_classes = [
+        "bathtub",
+        "bed",
+        "chair",
+        "desk",
+        "dresser",
+        "monitor",
+        "night_stand",
+        "sofa",
+        "table",
+        "toilet",
+    ]
     pc_count = 600
     object_index_limit = 100
 
