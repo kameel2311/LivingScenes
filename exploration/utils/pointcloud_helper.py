@@ -164,7 +164,7 @@ def path_generator(data_dir, object_class, file, instance):
     """
     Generate the path to the object instance
     """
-    instance_string = str(instance).zfill(4)
+    instance_string = str(instance + 1).zfill(4)  # Starts from 1
     path = os.path.join(
         data_dir, object_class, file, f"{object_class}_{instance_string}.off"
     )
@@ -334,6 +334,16 @@ def rotate_pointcloud_randomly(pointcloud, pure_z_rotation=False, identity=False
     Rotate the point cloud using the rotation matrix
     """
     rotation_matrix = generate_random_rotation(pure_z_rotation)
+    if not identity:
+        return (rotation_matrix @ pointcloud.T).T, rotation_matrix
+    else:
+        return pointcloud, np.eye(3)
+
+
+def rotate_pointcloud(pointcloud, rotation_matrix, identity=False):
+    """
+    Rotate the point cloud using the rotation matrix
+    """
     if not identity:
         return (rotation_matrix @ pointcloud.T).T, rotation_matrix
     else:
