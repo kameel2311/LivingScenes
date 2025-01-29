@@ -3,6 +3,8 @@ Comparing Object Instances from the same class and different classes
 """
 
 import sys
+
+sys.path.append("../")
 from utils.metrics_helper import (
     matrix_fitness_metric,
     plot_data,
@@ -18,7 +20,7 @@ from utils.pointcloud_helper import (
     rotate_pointcloud_randomly,
 )
 
-sys.path.append("../")
+sys.path.append("../../")
 
 import torch
 import numpy as np
@@ -54,8 +56,8 @@ if __name__ == "__main__":
     torch.set_default_dtype(torch.float64)
 
     # Loading the Model
-    ckpt = "../weights"
-    solver_cfg = load_yaml("../configs/more_3rscan.yaml")
+    ckpt = "../../weights"
+    solver_cfg = load_yaml("../../configs/more_3rscan.yaml")
     solver_cfg["shape_priors"]["ckpt_dir"] = ckpt
     solver = More_Solver(solver_cfg)
     model = solver.model
