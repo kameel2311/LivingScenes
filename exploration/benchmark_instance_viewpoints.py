@@ -87,14 +87,14 @@ if __name__ == "__main__":
     solver = More_Solver(solver_cfg)
     model = solver.model
 
-    # Benchmark Iterations
+    # Benchmark Iterations, Idealworks test doesnt make sense as only one instance is available
     dataloader = Dataloader(
         "ModelNet10", OBJECT_INDEX_LIMIT
     )  # "ModelNet10" or "Idealworks"
     object_classes, object_index_limit, noise_std, alignment_matrix = (
         dataloader.get_metadata()
     )
-    object_classes = ["chair", "table", "monitor", "sofa"]
+    # object_classes = ["chair", "table", "monitor", "sofa"]
     # object_classes = [
     #     "bathtub",
     #     "bed",
