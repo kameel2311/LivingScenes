@@ -60,8 +60,8 @@ VISUALIZE = False
 object_index_limit = 100
 
 # Sampling Options
-MIN_ANGLE = -120
-MAX_ANGLE = 120
+MIN_ANGLE = 0
+MAX_ANGLE = 360
 PC_COUNT = 600
 SEQUENTIAL = False
 

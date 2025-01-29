@@ -157,6 +157,7 @@ def eval_relocalization(dataset, solver):
                 rescan_tsfm, torch_se3.inverse(ref_tsfm)
             )
             for ins_ref, ins_rescan, gt_tsfm in zip(ref_pc, rescan_pc, gt_tsfm_lst):
+                print(ins_ref.shape)
                 pred_R, pred_t = solver._solve_pairwise_registration(
                     ins_ref.T[None], ins_rescan.T[None], optim=False
                 )

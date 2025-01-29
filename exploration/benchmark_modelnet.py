@@ -70,8 +70,8 @@ if __name__ == "__main__":
     dataset_off_diagonal_mean = []
     dataset_off_diagonal_std = []
     rotational_errors = []
-    # for idx in range(1, object_index_limit):
-    for idx in [1, 2, 4, 6, 7, 8]:
+    for idx in range(1, object_index_limit):
+        # for idx in [1, 2, 4, 6, 7, 8]:
         # Load Object Instance
         object_meshes = []
         for object_class in object_classes:
@@ -95,6 +95,7 @@ if __name__ == "__main__":
                     pointcloud, pure_z_rotation=True
                 )
                 pointcloud = add_gaussian_noise(pointcloud, sigma=0.2)
+                # draw_point_cloud(pointcloud)
                 rescan_object_pointclouds.append(pointcloud)
                 gt_rotation.append(torch.tensor(rot_matrix))
             gt_rotation = torch.stack(gt_rotation)

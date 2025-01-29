@@ -105,3 +105,12 @@ if __name__ == "__main__":
     plot_data(
         dataset_diagonal_mean, dataset_off_diagonal_mean, dataset_off_diagonal_std
     )
+
+    from utils.pointcloud_helper import draw_point_cloud
+
+    # # Visualize the Objects in the Dataset
+    # for data in dataset:
+    #     ref_pc = data[0]["pc"]
+    #     rescan_pc = data[1]["pc"]
+
+    #     draw_point_cloud(ref_pc[0])

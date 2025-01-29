@@ -262,6 +262,10 @@ W_T_C = transformation_matrix(W_R_C, np.zeros([1, 3]))
 
 if __name__ == "__main__":
     DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
+    NUM_VIEWPOINTS = 4
+    MIN_ANGLE = 0
+    MAX_ANGLE = 360
+    SEQUENTIAL = False
     # Load Object Instance
     file = "train"
 
@@ -276,7 +280,7 @@ if __name__ == "__main__":
 
     # Loop through the instances
     # for object_class in ["chair", "table", "monitor", "sofa"]:
-    for object_class in ["sofa"]:
+    for object_class in ["chair"]:
         # Champfer Distance
         mean_objects_champfer_distance = []
         for instance in range(1, 100):
@@ -295,11 +299,29 @@ if __name__ == "__main__":
 
             # Camera Poses
             radius = np.max(np.linalg.norm(pointcloud_centered, axis=1)) * 1.5
-            world_pose, pyrender_pose = get_circle_poses(5, 0, 120, radius, center)
+            world_pose, pyrender_pose = get_circle_poses(
+                NUM_VIEWPOINTS,
+                MIN_ANGLE,
+                MAX_ANGLE,
+                radius,
+                center,
+                sequential=SEQUENTIAL,
+            )
 
             # Loading Mesh and Setup Camera
             camera_py = camera.get_pyrender_camera()
             renderer = pyrender.OffscreenRenderer(image_width, image_height)
+
+            # Visualize all camera poses
+            visualized_cameras = [
+                (k, [image_width, image_height], cal_cam_pose)
+                for cal_cam_pose in world_pose
+            ]
+            draw_point_cloud_with_cameras(
+                pointcloud,
+                title="Point Cloud",
+                cameras=visualized_cameras,
+            )
 
             # Loop through the camera poses
             temp_distance = []
@@ -316,6 +338,7 @@ if __name__ == "__main__":
                     pyrender_pose[i],
                     mesh_scale=scaling_factor,
                     visualize=False,
+                    pointcloud=pointcloud,
                 )
                 if i != 0:
                     champfer_distance = pcu.chamfer_distance(
