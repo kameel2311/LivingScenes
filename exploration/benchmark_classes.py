@@ -2,21 +2,21 @@
 Comparing Object Instances from the same class and different classes
 """
 
-import sys, os
+import sys
 from utils.metrics_helper import (
     matrix_fitness_metric,
     plot_data,
     plot_rre,
     matrix_angular_similarity,
 )
-from utils.idealworks_assests_helper import idealworks_path_generator
-
+from utils.dataloader import Dataloader
 from utils.pointcloud_helper import (
     path_generator,
     sample_mesh_random,
     draw_point_cloud,
     add_gaussian_noise,
     rotate_pointcloud_randomly,
+    rotate_pointcloud,
 )
 
 sys.path.append("../")
@@ -46,40 +46,6 @@ from evaluate import (
     compute_volumetric_iou,
 )
 
-
-class Dataloader:
-    def __init__(self, dataset, object_idx_limit):
-        self.dataset = dataset
-        self.object_idx_limit = object_idx_limit
-        self.set_metadata()
-        self.object_classes = os.listdir(self.data_dir)
-
-    def set_metadata(self):
-        if self.dataset == "ModelNet10":
-            self.data_dir = "/Datasets/ModelNet10/ModelNet10"
-            self.folder = "train"
-            self.noise = 0.5
-
-        elif self.dataset == "Idealworks":
-            self.data_dir = "/Datasets/Idealworks_assests"
-            self.folder = ""
-            self.object_idx_limit = 1  # Because there is only one object per class
-            self.noise = 0.05
-        else:
-            raise ValueError("Invalid dataset")
-
-    def get_path(self, object_class, idx):
-        if self.dataset == "ModelNet10":
-            return path_generator(self.data_dir, object_class, self.folder, idx)
-        elif self.dataset == "Idealworks":
-            return idealworks_path_generator(self.data_dir, object_class)
-        else:
-            raise ValueError("Invalid dataset")
-
-    def get_metadata(self):
-        return self.object_classes, self.object_idx_limit, self.noise
-
-
 NUM_ITERATIONS = 10
 MAX_IDX = 100
 PC_COUNT = 600
@@ -97,7 +63,9 @@ if __name__ == "__main__":
 
     # Benchmark Iterations
     dataloader = Dataloader("Idealworks", MAX_IDX)  # "ModelNet10" or "Idealworks"
-    object_classes, object_index_limit, noise_std = dataloader.get_metadata()
+    object_classes, object_index_limit, noise_std, alignment_matrix = (
+        dataloader.get_metadata()
+    )
 
     # object_classes = [
     #     "pallet_1",
@@ -141,6 +109,7 @@ if __name__ == "__main__":
             for i, (v, f) in enumerate(object_meshes):
                 print(f"Object: ", {object_classes[i]}, " index: ", idx)
                 pointcloud = sample_mesh_random(v, f, num_samples=PC_COUNT)
+                pointcloud, _ = rotate_pointcloud(pointcloud, alignment_matrix)
                 pointcloud = add_gaussian_noise(pointcloud, sigma=noise_std)
                 ref_object_pointclouds.append(pointcloud)
 
@@ -148,6 +117,7 @@ if __name__ == "__main__":
                     draw_point_cloud(pointcloud)
 
                 pointcloud = sample_mesh_random(v, f, num_samples=PC_COUNT)
+                pointcloud, _ = rotate_pointcloud(pointcloud, alignment_matrix)
                 pointcloud, rot_matrix = rotate_pointcloud_randomly(
                     pointcloud, pure_z_rotation=True
                 )

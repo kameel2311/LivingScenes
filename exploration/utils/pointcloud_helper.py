@@ -340,14 +340,14 @@ def rotate_pointcloud_randomly(pointcloud, pure_z_rotation=False, identity=False
         return pointcloud, np.eye(3)
 
 
-def rotate_pointcloud(pointcloud, rotation_matrix, identity=False):
+def rotate_pointcloud(pointcloud, rotation_matrix):
     """
     Rotate the point cloud using the rotation matrix
     """
-    if not identity:
-        return (rotation_matrix @ pointcloud.T).T, rotation_matrix
-    else:
+    if rotation_matrix is np.eye(3):
         return pointcloud, np.eye(3)
+    else:
+        return (rotation_matrix @ pointcloud.T).T, rotation_matrix
 
 
 if __name__ == "__main__":

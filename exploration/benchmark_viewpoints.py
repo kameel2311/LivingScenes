@@ -11,6 +11,7 @@ from utils.metrics_helper import (
     plot_correlation,
     compute_pointcloud_overlap,
 )
+from utils.dataloader import Dataloader
 
 from utils.pointcloud_helper import (
     path_generator,
@@ -19,6 +20,7 @@ from utils.pointcloud_helper import (
     draw_point_cloud,
     add_gaussian_noise,
     rotate_pointcloud_randomly,
+    rotate_pointcloud,
 )
 from utils.rendering_helper import (
     Camera,
@@ -53,8 +55,6 @@ from evaluate import (
 )
 
 # Constants
-DATA_DIR = "/Datasets/ModelNet10/ModelNet10"
-FOLDER = "train"
 NUM_VIEWPOINTS = 4
 VISUALIZE = False
 object_index_limit = 100
@@ -76,19 +76,25 @@ if __name__ == "__main__":
     model = solver.model
 
     # Benchmark Iterations
+    dataloader = Dataloader(
+        "ModelNet10", object_index_limit
+    )  # "ModelNet10" or "Idealworks"
+    object_classes, object_index_limit, noise_std, alignment_matrix = (
+        dataloader.get_metadata()
+    )
     # object_classes = ["chair", "table", "monitor", "sofa"]
-    object_classes = [
-        "bathtub",
-        "bed",
-        "chair",
-        "desk",
-        "dresser",
-        "monitor",
-        "night_stand",
-        "sofa",
-        "table",
-        "toilet",
-    ]
+    # object_classes = [
+    #     "bathtub",
+    #     "bed",
+    #     "chair",
+    #     "desk",
+    #     "dresser",
+    #     "monitor",
+    #     "night_stand",
+    #     "sofa",
+    #     "table",
+    #     "toilet",
+    # ]
 
     # Variable Declarations
     dataset_diagonal_mean = []
@@ -110,17 +116,18 @@ if __name__ == "__main__":
     k = camera.get_intrinsics()
     camera_py = camera.get_pyrender_camera()
 
-    for idx in range(1, object_index_limit):
+    for idx in range(0, object_index_limit):
         # for idx in [1]:
         object_meshes = []
         object_rendering_info = []
 
         # Load Object Instance and Extract Pointcloud & Rendering Poses
         for object_class in object_classes:
-            path_to_file = path_generator(DATA_DIR, object_class, FOLDER, idx)
+            path_to_file = dataloader.get_path(object_class, idx)
             v, f = pcu.load_mesh_vf(path_to_file)
             object_meshes.append((v, f))
             pointcloud = sample_mesh_random(v, f, num_samples=PC_COUNT)
+            # pointcloud, _ = rotate_pointcloud(pointcloud, alignment_matrix)
             pointcloud, pointcloud_centered, center, scaling_factor = scale_point_cloud(
                 pointcloud, inference_method=False, desired_max_dim=10
             )
