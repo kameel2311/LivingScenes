@@ -3,6 +3,7 @@ Comparing Object Instances from the same class and different classes
 """
 
 import sys
+import logging
 from utils.metrics_helper import (
     matrix_fitness_metric,
     plot_data,
@@ -46,10 +47,18 @@ from evaluate import (
     compute_volumetric_iou,
 )
 
-NUM_ITERATIONS = 10
-MAX_IDX = 100
+NUM_ITERATIONS = 2
+MAX_IDX = 50
 PC_COUNT = 600
-VISUALIZE = True
+VISUALIZE = False
+
+logging.basicConfig(
+    filename="benchmark_classes_rotation.log",
+    level=logging.DEBUG,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    filemode="w",
+)
+logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     torch.set_default_dtype(torch.float64)
@@ -62,7 +71,7 @@ if __name__ == "__main__":
     model = solver.model
 
     # Benchmark Iterations
-    dataloader = Dataloader("Idealworks", MAX_IDX)  # "ModelNet10" or "Idealworks"
+    dataloader = Dataloader("ModelNet10", MAX_IDX)  # "ModelNet10" or "Idealworks"
     object_classes, object_index_limit, noise_std, alignment_matrix = (
         dataloader.get_metadata()
     )
@@ -87,6 +96,7 @@ if __name__ == "__main__":
     # Console Output
     print(f"Object Classes: {object_classes}")
     print(f"Object Index Limit: {object_index_limit}")
+    logger.info(f"Object Classes: {object_classes}")
 
     # Variable Declarations
     dataset_diagonal_mean = []
@@ -94,7 +104,6 @@ if __name__ == "__main__":
     dataset_off_diagonal_std = []
     rotational_errors = []
     for idx in range(0, object_index_limit):
-        # for idx in [1, 2, 4, 6, 7, 8]:
         # Load Object Instance
         object_meshes = []
         for object_class in object_classes:
@@ -164,6 +173,12 @@ if __name__ == "__main__":
             rres = rres.cpu().numpy()
             for rre in rres:
                 rotational_errors.append(rre[0])
+
+            # Logging friendly format
+            logging_rotations = {}
+            for object_class, rre in zip(object_classes, rres):
+                logging_rotations[object_class] = rre[0]
+            logger.info(f"Object Index: {idx}, Rotational Errors: {logging_rotations}")
 
     plot_data(
         dataset_diagonal_mean, dataset_off_diagonal_mean, dataset_off_diagonal_std

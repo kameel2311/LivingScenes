@@ -329,25 +329,33 @@ def generate_random_rotation(pure_z_rotation=False):
     return rotation_matrix
 
 
-def rotate_pointcloud_randomly(pointcloud, pure_z_rotation=False, identity=False):
+def rotate_pointcloud_randomly(
+    pointcloud, pure_z_rotation=False, identity=False, about_center=False
+):
     """
     Rotate the point cloud using the rotation matrix
     """
     rotation_matrix = generate_random_rotation(pure_z_rotation)
-    if not identity:
+    if identity:
+        return pointcloud, np.eye(3)
+    if not about_center:
         return (rotation_matrix @ pointcloud.T).T, rotation_matrix
     else:
-        return pointcloud, np.eye(3)
+        pointcloud, center = center_pointcloud(pointcloud)
+        return (rotation_matrix @ pointcloud.T).T + center, rotation_matrix
 
 
-def rotate_pointcloud(pointcloud, rotation_matrix):
+def rotate_pointcloud(pointcloud, rotation_matrix, about_center=False):
     """
     Rotate the point cloud using the rotation matrix
     """
     if rotation_matrix is np.eye(3):
         return pointcloud, np.eye(3)
-    else:
+    elif not about_center:
         return (rotation_matrix @ pointcloud.T).T, rotation_matrix
+    else:
+        pointcloud, center = center_pointcloud(pointcloud)
+        return (rotation_matrix @ pointcloud.T).T + center, rotation_matrix
 
 
 if __name__ == "__main__":
