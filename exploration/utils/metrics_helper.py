@@ -149,6 +149,7 @@ def plot_dataset(
     dataset_diagonal_mean,
     dataset_off_diagonal_mean,
     dataset_off_diagonal_std,
+    same_color=False,
 ):
     plt.figure(figsize=(10, 6))
     # Generate a color palette with enough unique colors for the number of keys
@@ -156,14 +157,20 @@ def plot_dataset(
     palette = sns.color_palette("husl", len(keys))
 
     for i, key in enumerate(keys):
-        color = palette[i]  # Assign a unique color for each key
+        if not same_color:  # Same for all classes
+            color_diag = color_off_diag = palette[
+                i
+            ]  # Assign a unique color for each key
+        else:
+            color_off_diag = "orange"
+            color_diag = "blue"
 
         # Histogram with density curve for off-diagonal means
         sns.histplot(
             dataset_off_diagonal_mean[key],
             bins=10,
             kde=True,
-            color=color,
+            color=color_off_diag,
             label=f"Off-Diagonal Means ({key})",
             alpha=0.6,
             stat="density",
@@ -175,7 +182,7 @@ def plot_dataset(
             dataset_diagonal_mean[key],
             bins=10,
             kde=True,
-            color=color,
+            color=color_diag,
             label=f"Diagonal Means ({key})",
             alpha=0.6,
             stat="density",

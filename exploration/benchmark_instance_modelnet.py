@@ -196,4 +196,5 @@ if __name__ == "__main__":
         dataset_diagonal_mean,
         dataset_off_diagonal_mean,
         dataset_off_diagonal_std,
+        same_color=True,
     )

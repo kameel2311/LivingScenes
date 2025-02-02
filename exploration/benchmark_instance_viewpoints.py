@@ -60,7 +60,7 @@ from evaluate import (
 NUM_VIEWPOINTS = 4
 VISUALIZE = False
 OBJECT_INDEX_LIMIT = 100
-NUM_SCENES = 1
+NUM_SCENES = 10
 NUM_OBJECTS_PER_SCENE = 4
 
 # Sampling Options
@@ -316,7 +316,10 @@ if __name__ == "__main__":
 
     # Plot Whole dataset togther
     plot_dataset(
-        dataset_diagonal_mean, dataset_off_diagonal_mean, dataset_off_diagonal_std
+        dataset_diagonal_mean,
+        dataset_off_diagonal_mean,
+        dataset_off_diagonal_std,
+        same_color=True,
     )
     # plot_rre(rotational_errors, labels=object_classes)
 
