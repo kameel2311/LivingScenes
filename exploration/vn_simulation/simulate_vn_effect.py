@@ -268,7 +268,6 @@ if __name__ == "__main__":
     rotations = np.linspace(0, 180, 19)
     gradual_metrics = []
     for rotation in rotations:
-        print(f"Rotation: {rotation}")
         gradual_scene = Scene(objects)
         for view_idx in range(num_views):
             for obj_idx in range(len(objects)):
@@ -282,3 +281,20 @@ if __name__ == "__main__":
 
     plot_gradual_metrics(gradual_metrics, x_label="Iterations", x_values=rotations)
     gradual_scene.visualize()
+
+    # Scene as if more data retained
+    scene = Scene(objects)
+    for view_idx in range(num_views):
+        for obj_idx in range(1, len(objects)):
+            scene.add_to_scene(obj_idx, view_idx)
+    scene.visualize()
+    adding_object_metrics = []
+    adding_object_metrics.append(
+        (scene.get_MAD(), scene.get_scene_coverage(epsilon=1.0))
+    )
+    for i in range(4):
+        scene.add_to_scene(0, i)
+        adding_object_metrics.append(
+            (scene.get_MAD(), scene.get_scene_coverage(epsilon=1.0))
+        )
+    plot_gradual_metrics(adding_object_metrics, x_label="Added Object")
