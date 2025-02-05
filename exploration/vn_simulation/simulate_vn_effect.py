@@ -24,6 +24,25 @@ from utils.metrics_helper import mean_absolute_distance, pointcloud_coverage
 np.random.seed(0)
 
 
+def plot_gradual_metrics(metrics, x_values=None, x_label="Added View"):
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(2, 1, figsize=(10, 10))
+    if x_values is None:
+        x_values = range(len(metrics))
+    ax[0].plot(x_values, [metric[0] for metric in metrics], label="MAD")
+    ax[0].set_title("Mean Absolute Distance")
+    ax[0].set_xlabel(x_label)
+    ax[0].set_ylabel("MAD")
+    ax[0].grid()
+    ax[1].plot(x_values, [metric[1] for metric in metrics], label="Coverage")
+    ax[1].set_title("Pointcloud Coverage")
+    ax[1].set_xlabel(x_label)
+    ax[1].set_ylabel("Coverage")
+    ax[1].grid()
+    plt.show()
+
+
 class Object:
     def __init__(
         self,
@@ -194,6 +213,11 @@ class Scene:
             raise ValueError("No objects added to the scene")
 
 
+# TODO: 1) Major edit, make the scaling reflect on the number of
+#       pointclouds rather than uniformly having the objects to same scale
+#       2) Implement the subsampling of the object pointclouds
+#       3) TSDF Integration and Sampling per object ?
+
 if __name__ == "__main__":
     # Define the dataset to work with
     dataloader = Dataloader("ModelNet10", None)
@@ -201,7 +225,7 @@ if __name__ == "__main__":
     scene_objects = ["chair", "table", "sofa"]
     scene_object_idx = [0, 1, 2]
     object_centers = [(40, 35, 0), (50, -20, 0), (-20, 0, 0)]
-    object_num_samples = [600, 600, 1200]
+    object_num_samples = [400] * 3  # [600, 600, 1200]
     num_views = 4
 
     # Scene's Camera
@@ -227,12 +251,34 @@ if __name__ == "__main__":
             )
         )
 
-    # Define the scene
-    scene = Scene(objects)
-    scene.add_to_scene(0, 0, yaw_angle=90)
-    scene.add_to_scene(0, 1)
-    scene.add_to_scene(1, 0)
-    scene.add_to_scene(2, 1)
-    scene.visualize()
-    print("MAD VALUE: ", scene.get_MAD())
-    print("Scene Coverage: ", scene.get_scene_coverage(epsilon=0.3))
+    # Metrics as Views are gradually added
+    gradual_scene = Scene(objects)
+    gradual_metrics = []
+    for view_idx in range(num_views):
+        for obj_idx in range(len(objects)):
+            gradual_scene.add_to_scene(obj_idx, view_idx)
+            gradual_metrics.append(
+                (gradual_scene.get_MAD(), gradual_scene.get_scene_coverage(epsilon=1.0))
+            )
+
+    plot_gradual_metrics(gradual_metrics)
+    gradual_scene.visualize()
+
+    # Metrics as Views are gradually added
+    rotations = np.linspace(0, 180, 19)
+    gradual_metrics = []
+    for rotation in rotations:
+        print(f"Rotation: {rotation}")
+        gradual_scene = Scene(objects)
+        for view_idx in range(num_views):
+            for obj_idx in range(len(objects)):
+                gradual_scene.add_to_scene(obj_idx, view_idx, yaw_angle=rotation)
+        gradual_metrics.append(
+            (
+                gradual_scene.get_MAD(),
+                gradual_scene.get_scene_coverage(epsilon=1.0),
+            )
+        )
+
+    plot_gradual_metrics(gradual_metrics, x_label="Iterations", x_values=rotations)
+    gradual_scene.visualize()
