@@ -8,6 +8,7 @@ from utils.pointcloud_helper import path_generator
 from utils.idealworks_assests_helper import idealworks_path_generator
 
 
+# TODO: Rethink object_idx_limit, make artibutes Private
 class Dataloader:
     def __init__(self, dataset, object_idx_limit):
         self.dataset = dataset

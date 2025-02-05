@@ -284,3 +284,43 @@ def compute_pointcloud_overlap(pc1, pc2, epsilon):
         len(pc1) + len(pc2) - mean_overlapping_points
     )
     return overlap_ratio
+
+
+def mean_absolute_distance(gt_pc, recon_pc):
+    """Computes the mean absolute distance of each point in the ground
+       truth point cloud to the nearest point in the reconstructed point cloud.
+
+    Args:
+        gt_pc (np.ndarray): Ground truth pointcloud, shape (n1, 3).
+        recon_pc (np.ndarray): Simulated Mesh pointcloud, shape (n2, 3).
+    """
+    # Build a KDTree for the ground truth point cloud
+    tree = cKDTree(gt_pc)
+
+    # Query the KDTree with the first point cloud
+    distances, _ = tree.query(recon_pc, k=1)  # k=1 finds the nearest neighbor
+
+    assert len(distances) == len(recon_pc)
+    # Calculate the mean absolute distance
+    mean_absolute_distance = np.mean(distances)
+    return mean_absolute_distance
+
+
+def pointcloud_coverage(gt_pc, recon_pc, epsilon):
+    """Computes the perentage of points from gt_pc that are within an epsilon distance
+       of the nearest point in the recon_pc.
+
+    Args:
+        gt_pc (np.ndarray): Ground truth pointcloud, shape (n1, 3).
+        recon_pc (np.ndarray): Simulated Mesh pointcloud, shape (n2, 3).
+        epsilon (float): Distance threshold for overlap.
+    """
+    # Build a KDTree for the reconstructed point cloud
+    tree = cKDTree(recon_pc)
+
+    # Query the KDTree with the ground truth point cloud
+    distances, _ = tree.query(gt_pc, k=1)  # k=1 finds the nearest neighbor
+    assert len(distances) == len(gt_pc)
+
+    # Percentage of points in gt_pc that have a neighbor within epsilon in recon_pc
+    return np.sum(distances <= epsilon) / len(gt_pc)

@@ -37,6 +37,9 @@ class Camera:
     def get_intrinsics(self):
         return self.k
 
+    def get_resolution(self):
+        return self.image_width, self.image_height
+
 
 def transformation_matrix(rotation, translation):
     """
@@ -276,7 +279,6 @@ if __name__ == "__main__":
         scale=1, image_height=image_height, image_width=image_width, fx=250, fy=250
     )
     k = camera.get_intrinsics()
-    num_cameras = 5
 
     # Loop through the instances
     # for object_class in ["chair", "table", "monitor", "sofa"]:
@@ -310,7 +312,6 @@ if __name__ == "__main__":
 
             # Loading Mesh and Setup Camera
             camera_py = camera.get_pyrender_camera()
-            renderer = pyrender.OffscreenRenderer(image_width, image_height)
 
             # Visualize all camera poses
             visualized_cameras = [
@@ -325,7 +326,7 @@ if __name__ == "__main__":
 
             # Loop through the camera poses
             temp_distance = []
-            for i in range(num_cameras):
+            for i in range(NUM_VIEWPOINTS):
                 rendered_pc = render_point_cloud_from_viewpoint(
                     v,
                     f,
