@@ -178,6 +178,7 @@ def render_point_cloud_from_viewpoint(
     mesh_scale=1,
     pointcloud=None,
     visualize=False,
+    return_depth=False,
 ):
 
     # Rendering
@@ -225,7 +226,8 @@ def render_point_cloud_from_viewpoint(
                 "Point Cloud with Circular camera and visible points",
                 cameras=[(k, [image_width, image_height], world_pose)],
             )
-
+    if return_depth:
+        return visible_points, depth
     return visible_points
 
 
