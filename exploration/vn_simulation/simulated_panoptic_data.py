@@ -9,7 +9,7 @@ import point_cloud_utils as pcu
 sys.path.append("../")
 from utils.dataloader import Dataloader
 from utils.simulation_helper import Object, Scene
-from utils.rendering_helper import Camera
+from utils.rendering_helper import Camera, transformation_matrix
 from PIL import Image as PILImage
 import time
 
@@ -28,8 +28,8 @@ def depth_to_segmentation(depth_image, threshold=0.0):
 def depth_to_rgd(depth_image, threshold=0.0):
     """Converts depth image to rgb image."""
     rgb_image = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX)
-    rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_GRAY2RGB)
     rgb_image = np.array(rgb_image, dtype=np.uint8)
+    rgb_image = cv2.cvtColor(rgb_image, cv2.COLOR_GRAY2RGB)
     # rgb_image = cv2.applyColorMap(rgb_image, cv2.COLORMAP_JET)
 
     return rgb_image
@@ -61,6 +61,8 @@ def plot_image(depth_image, segementation_image, rgb, title="Image"):
 output_dir = "/Datasets/simulated_data/"
 run_name = "run1"
 run_dir = os.path.join(output_dir, run_name)
+
+VOX_T_WORLD = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 
 if __name__ == "__main__":
     # Check if the output directory exists
@@ -100,7 +102,8 @@ if __name__ == "__main__":
     # object.visualize(depth=True)
 
     # The camera poses
-    camera_poses = object.get_pyrender_poses()
+    # camera_poses = object.get_pyrender_poses()
+    camera_poses = object.get_world_poses()
     depth_images = object.get_depth_images()
     segmentation_images = [
         depth_to_segmentation(depth_image) for depth_image in depth_images
@@ -108,53 +111,72 @@ if __name__ == "__main__":
     rgb_images = [depth_to_rgd(depth_image) for depth_image in depth_images]
     img_no_and_ts = {}
     start_time = time.time()
+    first_pose = None
 
     # Save the intrensics
     with open(os.path.join(output_dir, "intrinsics.txt"), "w") as f:
         f.write(" ".join(map(str, camera.get_intrinsics())) + "\n")
 
     # Loop and Save the data
-    for i, (depth_image, segmentation_image, rgb_image, pose) in enumerate(
-        zip(depth_images, segmentation_images, rgb_images, camera_poses)
-    ):
-        # print(f"View {i}: ", pose)
-        # plot_image(depth_image, segmentation_image, rgb_image, title=f"View {i}")
+    i = 0
+    for _ in range(2):
+        for _, (depth_image, segmentation_image, rgb_image, pose) in enumerate(
+            zip(depth_images, segmentation_images, rgb_images, camera_poses)
+        ):
+            # print(f"View {i}: ", pose)
+            # plot_image(depth_image, segmentation_image, rgb_image, title=f"View {i}")
 
-        # Image Name
-        image_id = "%06d" % i
-        img_no_and_ts[image_id] = start_time + i * 10
+            # if first_pose is None:
+            #     first_pose = pose.copy()
+            #     first_pose[:3, :3] = np.zeros((3, 3))
 
-        # Save depth image
-        depth_image = PILImage.fromarray(depth_image)
-        depth_image.save(
-            os.path.join(
-                run_dir,
-                image_id + "_depth.tiff",
+            # pose -= first_pose
+
+            # for i in range(100):
+            #     depth_image = depth_images[0]
+            #     segmentation_image = segmentation_images[0]
+            #     rgb_image = rgb_images[0]
+            #     pose = camera_poses[0]
+
+            # Flipping the Z axis as it seems the camera model of VOX is Y down
+            pose = VOX_T_WORLD @ pose
+
+            # Image Name
+            image_id = "%06d" % i
+            img_no_and_ts[image_id] = start_time + i * 1
+            i += 1
+
+            # Save depth image
+            depth_image = PILImage.fromarray(depth_image)
+            depth_image.save(
+                os.path.join(
+                    run_dir,
+                    image_id + "_depth.tiff",
+                )
             )
-        )
 
-        # Save colour image
-        cv2.imwrite(
-            os.path.join(
-                run_dir,
-                image_id + "_color.png",
-            ),
-            cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB),
-        )
+            # Save colour image
+            cv2.imwrite(
+                os.path.join(
+                    run_dir,
+                    image_id + "_color.png",
+                ),
+                cv2.cvtColor(rgb_image, cv2.COLOR_BGR2RGB),
+            )
 
-        # Save segmentation image
-        cv2.imwrite(
-            os.path.join(
-                run_dir,
-                image_id + "_segmentation.png",
-            ),
-            segmentation_image,
-        )
+            # Save segmentation image
+            cv2.imwrite(
+                os.path.join(
+                    run_dir,
+                    image_id + "_segmentation.png",
+                ),
+                segmentation_image,
+            )
 
-        # Save camera pose
-        with open(os.path.join(run_dir, image_id + "_pose.txt"), "w") as f:
-            for row in pose:
-                f.write(" ".join(map(str, row)) + "\n")
+            # Save camera pose
+            with open(os.path.join(run_dir, image_id + "_pose.txt"), "w") as f:
+                for row in pose:
+                    f.write(" ".join(map(str, row)) + "\n")
 
-        # Save the timestamps
-        save_timestamps_as_csv(img_no_and_ts, run_dir, file_name="timestamps.csv")
+            # Save the timestamps
+            save_timestamps_as_csv(img_no_and_ts, run_dir, file_name="timestamps.csv")

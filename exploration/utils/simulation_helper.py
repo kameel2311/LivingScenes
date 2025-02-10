@@ -50,7 +50,7 @@ class Object:
         (
             self._pointcloud,
             self._rendered_views,
-            _,
+            self._world_poses,
             self._pyrender_poses,
         ) = self.generate_pointclouds(camera)
         self.translate_object(translation)
@@ -76,6 +76,10 @@ class Object:
             center,
             sequential=True,
         )
+
+        # print(radius)
+        # print(world_poses[0])
+        # print(world_poses[1])
 
         camera_pyrender = camera.get_pyrender_camera()
         k = camera.get_intrinsics()
@@ -127,6 +131,9 @@ class Object:
 
     def get_pyrender_poses(self):
         return self._pyrender_poses
+
+    def get_world_poses(self):
+        return self._world_poses
 
     def get_depth_images(self):
         assert self.save_depth, "Depth Images not saved"
