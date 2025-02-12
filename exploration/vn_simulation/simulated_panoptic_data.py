@@ -1,6 +1,7 @@
 """Genetares simulated panoptic data for single object."""
 
 import cv2
+import csv
 import sys
 import os
 import numpy as np
@@ -58,7 +59,42 @@ def plot_image(depth_image, segementation_image, rgb, title="Image"):
     plt.show()
 
 
-output_dir = "/Datasets/simulated_data/"
+def create_gt_label(
+    directory,
+    class_name,
+    file_name="groundtruth_labels.csv",
+    class_id=1,
+    background_id=0,
+    object_size="S",
+    background_size="L",
+):
+    file_path = os.path.join(directory, file_name)
+
+    data = [
+        [
+            "InstanceID",
+            "ClassID",
+            "PanopticID",
+            "MeshID",
+            "InfraredID",
+            "R",
+            "G",
+            "B",
+            "Name",
+            "Size",
+        ],
+        [0, 0, 0, 0, 0, 55, 181, 57, "Background", background_size],
+        [1, 1, 1, 1, 13, 153, 108, 6, class_name, object_size],
+    ]
+
+    with open(file_path, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerows(data)
+
+    print(f"Data saved to {file_path}")
+
+
+output_dir = "/Datasets/simulated_data/chair"
 run_name = "run1"
 run_dir = os.path.join(output_dir, run_name)
 
@@ -102,7 +138,6 @@ if __name__ == "__main__":
     # object.visualize(depth=True)
 
     # The camera poses
-    # camera_poses = object.get_pyrender_poses()
     camera_poses = object.get_world_poses()
     depth_images = object.get_depth_images()
     segmentation_images = [
@@ -111,35 +146,26 @@ if __name__ == "__main__":
     rgb_images = [depth_to_rgd(depth_image) for depth_image in depth_images]
     img_no_and_ts = {}
     start_time = time.time()
-    first_pose = None
 
     # Save the intrensics
     with open(os.path.join(output_dir, "intrinsics.txt"), "w") as f:
         f.write(" ".join(map(str, camera.get_intrinsics())) + "\n")
 
+    # Save the ground truth labels
+    create_gt_label(output_dir, object_class)
+
     # Loop and Save the data
     i = 0
-    for _ in range(2):
+    for _ in range(3):
         for _, (depth_image, segmentation_image, rgb_image, pose) in enumerate(
             zip(depth_images, segmentation_images, rgb_images, camera_poses)
         ):
             # print(f"View {i}: ", pose)
             # plot_image(depth_image, segmentation_image, rgb_image, title=f"View {i}")
 
-            # if first_pose is None:
-            #     first_pose = pose.copy()
-            #     first_pose[:3, :3] = np.zeros((3, 3))
-
-            # pose -= first_pose
-
-            # for i in range(100):
-            #     depth_image = depth_images[0]
-            #     segmentation_image = segmentation_images[0]
-            #     rgb_image = rgb_images[0]
-            #     pose = camera_poses[0]
-
             # Flipping the Z axis as it seems the camera model of VOX is Y down
             pose = VOX_T_WORLD @ pose
+            # pose += np.array([[0, 0, 0, 1], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]])
 
             # Image Name
             image_id = "%06d" % i

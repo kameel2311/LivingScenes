@@ -21,6 +21,7 @@ from utils.rendering_helper import (
 from utils.metrics_helper import mean_absolute_distance, pointcloud_coverage
 
 
+# TODO: Change way of generating the pointclouds if it takes too much RAM
 class Object:
     def __init__(
         self,
