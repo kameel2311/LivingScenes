@@ -32,10 +32,12 @@ class Object:
         min_angle,
         max_angle,
         camera,
+        max_dim=10,
         translation=(0, 0, 0),
         random_rotation=False,
         fix_scaling=True,
         save_depth=False,
+        w_T_delta_pose_change=None,
     ):
         self.vertices, self.faces = pcu.load_mesh_vf(path)
         self.num_points = num_points
@@ -44,7 +46,9 @@ class Object:
         self.min_angle = min_angle
         self.max_angle = max_angle
         self.camera = camera
+        self.max_dim = max_dim
         self.fix_scaling = fix_scaling
+        self.w_T_delta_pose_change = w_T_delta_pose_change
         self.save_depth = save_depth
         self._depth_images = []
 
@@ -65,8 +69,11 @@ class Object:
         )
         # Preprocess Pointcloud
         pointcloud_scaled, pointcloud_scaled_centered, center, scaling_factor = (
-            scale_point_cloud(pointcloud, inference_method=False, desired_max_dim=10)
+            scale_point_cloud(
+                pointcloud, inference_method=False, desired_max_dim=self.max_dim
+            )
         )
+        print("Scaling factor: ", scaling_factor)
         # Camera Poses
         radius = np.max(np.linalg.norm(pointcloud_scaled_centered, axis=1)) * 1.5
         world_poses, pyrender_poses = get_circle_poses(
@@ -100,6 +107,7 @@ class Object:
                 visualize=False,
                 pointcloud=pointcloud_scaled,
                 return_depth=self.save_depth,
+                mesh_transform=self.w_T_delta_pose_change,
             )
             for i in range(self.num_views)
         ]

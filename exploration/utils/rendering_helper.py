@@ -179,6 +179,7 @@ def render_point_cloud_from_viewpoint(
     pointcloud=None,
     visualize=False,
     return_depth=False,
+    mesh_transform=None,
 ):
 
     # Rendering
@@ -188,7 +189,11 @@ def render_point_cloud_from_viewpoint(
     mesh = pyrender.Mesh.from_trimesh(mesh)
 
     # Define Scene and Renderer
-    scene.add(mesh, pose=PY_T_W)
+    if mesh_transform is not None:
+        mesh_pose = PY_T_W @ mesh_transform
+    else:
+        mesh_pose = PY_T_W
+    scene.add(mesh, pose=mesh_pose)
     scene.add(camera_py, pose=pyrender_pose)
     renderer = pyrender.OffscreenRenderer(image_width, image_height)
 
