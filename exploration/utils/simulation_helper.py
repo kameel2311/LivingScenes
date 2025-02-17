@@ -24,15 +24,15 @@ from utils.metrics_helper import mean_absolute_distance, pointcloud_coverage
 
 # Consider /2 as dist from center is taken
 CLASS_MAX_DIM_SIZE = {
-    "bathtub": 3,
-    "bed": 3,
+    "bathtub": 2,
+    "bed": 2,
     "chair": 1,
     "desk": 2,
-    "dresser": 4,
+    "dresser": 2,
     "monitor": 0.5,
     "night_stand": 1,
-    "sofa": 3,
-    "table": 4,
+    "sofa": 2,
+    "table": 2,
     "toilet": 1.5,
 }
 
@@ -110,7 +110,7 @@ class Object:
         elif self.scaling_Mode == "class_based":
             scaling_factor = round_to_1(
                 CLASS_MAX_DIM_SIZE.get(self.semantic_class)
-                / np.max(np.linalg.norm(pointcloud - center, axis=1))
+                / np.max(np.max(np.abs(pointcloud - center), axis=1) * 2)
             )
 
         # If Sampling Adaptation is true, then need to resample
