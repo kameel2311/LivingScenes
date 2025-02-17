@@ -287,8 +287,8 @@ def compute_pointcloud_overlap(pc1, pc2, epsilon):
 
 
 def mean_absolute_distance(gt_pc, recon_pc):
-    """Computes the mean absolute distance of each point in the ground
-       truth point cloud to the nearest point in the reconstructed point cloud.
+    """Computes the mean absolute distance of each point in the reconstructed
+        point cloud to the nearest point in the gt point cloud.
 
     Args:
         gt_pc (np.ndarray): Ground truth pointcloud, shape (n1, 3).

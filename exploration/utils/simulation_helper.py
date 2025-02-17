@@ -12,6 +12,8 @@ from utils.pointcloud_helper import (
     sample_mesh_random,
     rotate_pointcloud,
     scale_point_cloud,
+    center_pointcloud,
+    center_pointcloud_v2,
 )
 from utils.rendering_helper import (
     Camera,
@@ -36,6 +38,7 @@ class Object:
         translation=(0, 0, 0),
         random_rotation=False,
         fix_scaling=True,
+        adapt_num_points=False,
         save_depth=False,
         w_T_delta_pose_change=None,
     ):
@@ -48,6 +51,7 @@ class Object:
         self.camera = camera
         self.max_dim = max_dim
         self.fix_scaling = fix_scaling
+        self.adapt_num_points = adapt_num_points
         self.w_T_delta_pose_change = w_T_delta_pose_change
         self.save_depth = save_depth
         self._depth_images = []
@@ -74,6 +78,21 @@ class Object:
             )
         )
         print("Scaling factor: ", scaling_factor)
+
+        # If Sampling Adaptabtaion is true, then need to resample
+        if self.adapt_num_points:
+            self.num_points = int(self.num_points / scaling_factor)
+            self.num_rend_points = int(self.num_rend_points / scaling_factor)
+            pointcloud = sample_mesh_random(
+                self.vertices, self.faces, num_samples=self.num_points
+            )
+            # Preprocess Pointcloud
+            pointcloud_scaled, pointcloud_scaled_centered, center, scaling_factor = (
+                scale_point_cloud(
+                    pointcloud, inference_method=False, desired_max_dim=self.max_dim
+                )
+            )
+
         # Camera Poses
         radius = np.max(np.linalg.norm(pointcloud_scaled_centered, axis=1)) * 1.5
         world_poses, pyrender_poses = get_circle_poses(
@@ -92,6 +111,7 @@ class Object:
         camera_pyrender = camera.get_pyrender_camera()
         k = camera.get_intrinsics()
         image_width, image_height = camera.get_resolution()
+
         rendered_output = [
             render_point_cloud_from_viewpoint(
                 self.vertices,
@@ -166,6 +186,16 @@ class Object:
                 plt.colorbar()
                 plt.title(f"Depth Map {i}")
                 plt.show()
+
+    def sample_pointcloud(self, num_points: int):
+        pointcloud = sample_mesh_random(
+            self.vertices, self.faces, num_samples=num_points
+        )
+        _, center = center_pointcloud_v2(pointcloud)
+        print(center)
+        pointcloud[:, -1] += -3.743
+        pointcloud *= 0.06
+        return pointcloud
 
 
 class Scene:
