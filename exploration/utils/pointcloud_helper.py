@@ -297,20 +297,20 @@ def scale_point_cloud(pointcloud, inference_method=False, desired_max_dim=30):
     if not inference_method:
         radius = np.max(np.linalg.norm(pointcloud_centered, axis=1))
         scaling_factor = round_to_1(desired_max_dim / radius)
-    else:
-        # TODO: FIX THIS DOES NOT WORK
-        dist = np.linalg.norm(
-            pointcloud_centered[:, np.newaxis, :]
-            - pointcloud_centered[np.newaxis, :, :],
-            axis=-1,
-        )
+    # else:
+    #     # TODO: FIX THIS DOES NOT WORK
+    #     dist = np.linalg.norm(
+    #         pointcloud_centered[:, np.newaxis, :]
+    #         - pointcloud_centered[np.newaxis, :, :],
+    #         axis=-1,
+    #     )
 
-        # Flatten the distance matrix, sort the distances, and take the top 5 for each point
-        scaling_factor = np.mean(
-            np.sort(dist, axis=-1)[:, 1:6], axis=-1
-        )  # Exclude self-distance (0) for the top 5
-        scaling_factor = scaling_factor[:, None, None]
-        print(scaling_factor.shape)
+    #     # Flatten the distance matrix, sort the distances, and take the top 5 for each point
+    #     scaling_factor = np.mean(
+    #         np.sort(dist, axis=-1)[:, 1:6], axis=-1
+    #     )  # Exclude self-distance (0) for the top 5
+    #     scaling_factor = scaling_factor[:, None, None]
+    #     print(scaling_factor.shape)
 
     # Scaling
     pointcloud *= scaling_factor
