@@ -1,5 +1,5 @@
 import sys
-import os
+import math
 import numpy as np
 import point_cloud_utils as pcu
 from matplotlib import pyplot as plt
@@ -50,7 +50,7 @@ class Object:
         max_angle,
         camera,
         max_dim=10,
-        translation=(0, 0, 0),
+        center=None,
         random_rotation=False,
         scaling_Mode="rendering",
         adapt_num_points=False,
@@ -80,7 +80,9 @@ class Object:
             self._world_poses,
             self._pyrender_poses,
         ) = self.generate_pointclouds(camera)
-        self.translate_object(translation)
+
+        if center is not None:
+            self.center_object(center)
 
         # Final Pointcloud Scale (As Rendered, Original Mesh or Class Dict Based)
         assert scaling_Mode in [
@@ -88,6 +90,29 @@ class Object:
             "original",
             "class_based",
         ], "Fix Scaling should be either 'rendering', 'original' or 'class_based'"
+
+    def object_scale(self, pointcloud, center, rend_scaling_factor):
+        # Define the scaling factor & adapt the number of points
+        if self.scaling_Mode == "rendering":
+            scaling_factor = 1
+        elif self.scaling_Mode == "original":
+            scaling_factor = 1 / rend_scaling_factor
+            if self.adapt_num_points:
+                self.num_points = int(self.num_points * scaling_factor)
+                self.num_rend_points = int(self.num_rend_points * scaling_factor)
+        elif self.scaling_Mode == "class_based":
+            scaling_factor = round_to_1(
+                CLASS_MAX_DIM_SIZE.get(self.semantic_class)
+                / np.max(np.max(np.abs(pointcloud - center), axis=1) * 2)
+            )
+            if self.adapt_num_points:  # Since Scaling Factor is always less than 1
+                self.num_points = int(
+                    self.num_points * CLASS_MAX_DIM_SIZE.get(self.semantic_class)
+                )
+                self.num_rend_points = int(
+                    self.num_rend_points * CLASS_MAX_DIM_SIZE.get(self.semantic_class)
+                )
+        return scaling_factor
 
     def generate_pointclouds(self, camera):
         # Sample Pointcloud
@@ -102,25 +127,10 @@ class Object:
             )
         )
 
-        # Define the scaling factor
-        if self.scaling_Mode == "rendering":
-            scaling_factor = 1
-        elif self.scaling_Mode == "original":
-            scaling_factor = 1 / rend_scaling_factor
-        elif self.scaling_Mode == "class_based":
-            scaling_factor = round_to_1(
-                CLASS_MAX_DIM_SIZE.get(self.semantic_class)
-                / np.max(np.max(np.abs(pointcloud - center), axis=1) * 2)
-            )
-
-        # If Sampling Adaptation is true, then need to resample
-        if self.adapt_num_points and scaling_factor != 1:
-            self.num_points = np.max(
-                [int(self.num_points * scaling_factor), self.num_points]
-            )
-            self.num_rend_points = np.max(
-                [int(self.num_rend_points * scaling_factor), self.num_rend_points]
-            )
+        # Get Scaling Factor and Adapt Num Points
+        scaling_factor = self.object_scale(
+            pointcloud_scaled, center, rend_scaling_factor
+        )
 
         # Camera Poses
         radius = np.max(np.linalg.norm(pointcloud_scaled_centered, axis=1)) * 1.5
@@ -177,6 +187,7 @@ class Object:
 
         # Set Print Statements
         if self.verbose:
+            print(f"Semantic Class: {self.semantic_class}")
             print(f"Rendering Scaling Factor: {rend_scaling_factor}")
             print(f"Scaling Factor: {scaling_factor}")
             print(f"Scaling Mode: {self.scaling_Mode}")
@@ -186,12 +197,12 @@ class Object:
 
         return pointcloud, rendered_views, world_poses, pyrender_poses
 
-    def translate_object(self, translation, level_z=True):
+    def center_object(self, translation: list[float, float], level_z=True):
         if not level_z:
             z_delta = 0
         else:
             z_delta = -np.min(self._pointcloud[:, -1])
-        translation = translation + (z_delta)
+        translation.append(z_delta)
         self._pointcloud, shift = translate_pointcloud_center(
             self._pointcloud, translation
         )
@@ -240,18 +251,48 @@ class Object:
             self.vertices, self.faces, num_samples=num_points
         )
         _, center = center_pointcloud_v2(pointcloud)
-        print(center)
         pointcloud[:, -1] += -3.743
         pointcloud *= 0.06
         return pointcloud
 
+    def get_object_xy_radius(self):
+        centered_pointcloud, _ = center_pointcloud(self._pointcloud)
+        return np.max(np.linalg.norm(centered_pointcloud[:, :2], axis=1))
+
 
 class Scene:
-    def __init__(self, objects: list[Object]):
+    def __init__(self, objects: list[Object], distribute: bool = True):
         self.objects = objects
+        if distribute:
+            self.distribute_objects()
         self._gt_scene_pointcloud = self.create_gt_scene()
         self._simulated_scene_pointcloud = []
         self._simulated_scene_history = []
+
+    def distribute_objects(self, extra_spacing=0.5):
+        # Get Max Radius of all objects
+        object_radii = [object.get_object_xy_radius() for object in self.objects]
+        max_radius = np.max(object_radii)
+        distance_between_objects = 2 * max_radius + extra_spacing
+
+        # Grid Like Distribution
+        grid_size = int(math.ceil(math.sqrt(len(self.objects))))
+        x = np.linspace(
+            -distance_between_objects * grid_size / 2,
+            distance_between_objects * grid_size / 2,
+            grid_size,
+        )
+        y = np.linspace(
+            -distance_between_objects * grid_size / 2,
+            distance_between_objects * grid_size / 2,
+            grid_size,
+        )
+        x, y = np.meshgrid(x, y)
+        object_centers = np.array([x.flatten(), y.flatten()]).T
+
+        # Distribute Objects
+        for object, object_center in zip(self.objects, object_centers):
+            object.center_object(list(object_center))
 
     def create_gt_scene(self):
         scene_pointcloud = [object.get_pointcloud() for object in self.objects]
@@ -286,7 +327,7 @@ class Scene:
             raise ValueError("No objects added to the scene")
 
     def visualize(self):
-        print(self._gt_scene_pointcloud.shape)
+        print(f"Scene Shape: {self._gt_scene_pointcloud.shape}")
 
         draw_point_cloud(
             self._gt_scene_pointcloud,
