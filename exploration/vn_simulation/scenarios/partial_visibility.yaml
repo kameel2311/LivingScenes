@@ -1,4 +1,5 @@
 experiment_name: partial_visibility
+random_seed: 0
 
 # Universal Object Settings
 object_settings:
@@ -47,10 +48,20 @@ reconstruction:
     changed_objects: &changed_objects [0, 1, 2, 3, 4, 5, 6, 7, 8]
     changed_objects_visibility: 0.25 # Starting from index 0
     coverage_epsilon: 0.05
+    pose_error: # Keep Blank as None
 
   vn_enhanced:
     unchanged_objects_visibility: *unchanged_objects_visibility
     changed_objects: *changed_objects
     changed_objects_visibility: 1 # Starting from index 0
     coverage_epsilon: 0.05
+    pose_error:
+      rotation: 
+        min_angle_error: 0
+        max_angle_error: 20
+        sampling_distribution: "uniform"
+      translation:
+        min_displacement_xy: 0
+        max_displacement_xy: 0.1
+        sampling_distribution: "uniform"
 

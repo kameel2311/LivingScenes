@@ -14,8 +14,6 @@ from utils.dataloader import Dataloader
 from utils.simulation_helper import Object, Scene
 from utils.rendering_helper import Camera
 
-np.random.seed(0)
-
 
 def parse_scene_camera(config):
     return Camera(
@@ -141,6 +139,9 @@ if __name__ == "__main__":
     experiment_config_name = "partial_visibility.yaml"
     with open(os.path.join("scenarios", experiment_config_name), "r") as file:
         config = yaml.load(file, Loader=yaml.FullLoader)
+
+    # Setting the Random Seed
+    np.random.seed(config["random_seed"])
 
     # Define the dataset to work with
     dataloader = Dataloader(config["dataset"], None)

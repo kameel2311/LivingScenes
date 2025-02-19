@@ -328,9 +328,41 @@ class Scene:
             # Sequential Visibility Assumed
             max_view_id = int(visibility * self.objects[idx].num_views)
             view_ids = []  # If Sequential is no longer used in future
+
+            # Check if Rotation Error is Inflicted
+            yaw_angle = None
+            delta_trans = None
+            if changes_dict["pose_error"] is not None:
+                if changes_dict["pose_error"]["rotation"] is not None:
+                    rotational_error = changes_dict["pose_error"]["rotation"]
+                    if rotational_error["sampling_distribution"] == "uniform":
+                        yaw_angle = np.random.uniform(
+                            rotational_error["min_angle_error"],
+                            rotational_error["max_angle_error"],
+                        )
+                    else:
+                        raise NotImplementedError(
+                            "Sampling Distribution not implemented yet"
+                        )
+                if changes_dict["pose_error"]["translation"] is not None:
+                    translation_error = changes_dict["pose_error"]["translation"]
+                    if translation_error["sampling_distribution"] == "uniform":
+                        delta_trans = np.append(
+                            np.random.uniform(
+                                translation_error["min_displacement_xy"],
+                                translation_error["max_displacement_xy"],
+                                size=(2),
+                            ),
+                            0,
+                        )
+                    else:
+                        raise NotImplementedError(
+                            "Sampling Distribution not implemented yet"
+                        )
+
             for view_id in range(max_view_id):
                 view_ids.append(view_id)
-                self.add_to_scene(idx, view_id)
+                self.add_to_scene(idx, view_id, yaw_angle, delta_trans)
             # Scene Metrics
             gradual_metrics.append(
                 (
@@ -350,7 +382,7 @@ class Scene:
         return gradual_metrics, per_object_gradual_metrics
 
     # TODO: Implement subsampling from object to have better object pc distribution
-    def add_to_scene(self, object_idx, rendered_idx, yaw_angle=None):
+    def add_to_scene(self, object_idx, rendered_idx, yaw_angle=None, delta_trans=None):
         if (object_idx, rendered_idx) in self._simulated_scene_history:
             print("Object already added to the scene")
         else:
@@ -363,6 +395,8 @@ class Scene:
                     about_center=True,
                     z_angle=yaw_angle,
                 )
+            if delta_trans is not None:
+                rendered_view += delta_trans
 
             self._simulated_scene_pointcloud.append(rendered_view)
             self._simulated_scene_history.append((object_idx, rendered_idx))
