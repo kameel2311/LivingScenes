@@ -278,7 +278,7 @@ class Scene:
         self.objects = objects
         if distribute:
             self.distribute_objects()
-        self._gt_scene_pointcloud = self.create_gt_scene()
+        self._gt_scene_pointcloud = None
         self._simulated_scene_pointcloud = []
         self._simulated_scene_history = []
 
@@ -307,10 +307,16 @@ class Scene:
         for object, object_center in zip(self.objects, object_centers):
             object.center_object(list(object_center))
 
-    def create_gt_scene(self):
-        scene_pointcloud = [object.get_pointcloud() for object in self.objects]
+    def create_gt_scene(self, config: dict):
+        scene_pointcloud = []
+        for idx, object in enumerate(self.objects):
+            if idx not in config["skip_objects_from_gt"]:
+                scene_pointcloud.append(object.get_pointcloud())
         scene_pointcloud = np.concatenate(scene_pointcloud, axis=0)
         return scene_pointcloud
+
+    def set_gt_scene(self, config: dict):
+        self._gt_scene_pointcloud = self.create_gt_scene(config)
 
     def get_gt_scene(self):
         return self._gt_scene_pointcloud
@@ -320,6 +326,11 @@ class Scene:
         gradual_metrics = []
         per_object_gradual_metrics = {}
         for idx in range(len(self.objects)):
+            if (
+                idx in changes_dict["skip_objects_from_gt"]
+                and not changes_dict["map_skipped_objects"]
+            ):
+                continue
             if idx in changes_dict["changed_objects"]:
                 visibility = changes_dict["changed_objects_visibility"]
             else:
@@ -371,9 +382,15 @@ class Scene:
                 )
             )
             # Per Object Metrics
-            per_object_gradual_metrics[
+            base_object_key = (
                 f"{self.objects[idx].semantic_class}_{self.objects[idx].semantic_idx}"
-            ] = (
+            )
+            object_key = base_object_key
+            counter = 1
+            while object_key in per_object_gradual_metrics:
+                object_key = f"{base_object_key}_{counter}"
+                counter += 1
+            per_object_gradual_metrics[object_key] = (
                 self.objects[idx].get_object_MAD(view_ids),
                 self.objects[idx].get_object_coverage(
                     view_ids, epsilon=changes_dict["coverage_epsilon"]
@@ -438,9 +455,10 @@ class Scene:
         else:
             raise ValueError("No objects added to the scene")
 
-    def clear_simulated_scene(self):
+    def clear_scene(self):
         self._simulated_scene_pointcloud = []
         self._simulated_scene_history = []
+        self._gt_scene_pointcloud = None
 
 
 if __name__ == "__main__":
