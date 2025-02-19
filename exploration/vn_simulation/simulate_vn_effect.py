@@ -1,7 +1,9 @@
-"""This script is targeted to simulate the effect of the usage of VN Encoders with Panoptic TSDFs for reconstruction enhancement."""
+"""This script is targeted to simulate the effect of the usage of VN Encoders with Panoptic TSDFs for reconstruction enhancement.
+    It tries to emulate having already seen objects that get moved to regions of partial visibility and the effect of the VN Encoder on the reconstruction quality. """
 
 import os
 import sys
+import yaml
 import numpy as np
 import point_cloud_utils as pcu
 
@@ -11,6 +13,43 @@ from utils.simulation_helper import Object, Scene
 from utils.rendering_helper import Camera
 
 np.random.seed(0)
+
+
+def parse_scene_camera(config):
+    return Camera(
+        scale=config["camera"]["scale"],
+        image_height=config["camera"]["image_height"],
+        image_width=config["camera"]["image_width"],
+        fx=config["camera"]["fx"],
+        fy=config["camera"]["fy"],
+    )
+
+
+def parse_scene_objects(config, dataloader, camera):
+    # Define Objects
+    objects = []
+    object_settings = config["object_settings"]
+    for object_metadata in config["objects"]:
+        path_to_file = dataloader.get_path(
+            object_metadata["class"], object_metadata["object_idx"]
+        )
+        objects.append(
+            Object(
+                semantic_class=object_metadata["class"],
+                path=path_to_file,
+                num_points=object_settings["number_points"],
+                num_rend_points=object_settings["number_rendered_points"],
+                num_views=object_settings["number_views"],
+                min_angle=object_settings["min_angle"],
+                max_angle=object_settings["max_angle"],
+                camera=camera,
+                center=None,
+                scaling_Mode=object_settings["scaling_mode"],
+                adapt_num_points=object_settings["adapt_number_points"],
+                verbose=object_settings["verbose"],
+            )
+        )
+    return objects
 
 
 def plot_gradual_metrics(metrics, x_values=None, x_label="Added View"):
@@ -38,40 +77,24 @@ def plot_gradual_metrics(metrics, x_values=None, x_label="Added View"):
 #       3) TSDF Integration and Sampling per object ?
 
 if __name__ == "__main__":
+    # Load the configuration file
+    experiment_config_name = "partial_visibility.yaml"
+    with open(os.path.join("scenarios", experiment_config_name), "r") as file:
+        config = yaml.load(file, Loader=yaml.FullLoader)
+
     # Define the dataset to work with
-    dataloader = Dataloader("ModelNet10", None)
+    dataloader = Dataloader(config["dataset"], None)
     dataset_metadata = dataloader.get_metadata()
-    scene_objects = ["chair", "table", "sofa"]
-    scene_object_idx = [0, 1, 2]
-    object_centers = [(40, 35, 0), (50, -20, 0), (-20, 0, 0)]
-    object_num_samples = [400] * 3  # [600, 600, 1200]
-    num_views = 4
 
     # Scene's Camera
-    camera = Camera(scale=1, image_height=500, image_width=500, fx=250, fy=250)
+    camera = parse_scene_camera(config)
 
-    # Define Objects
-    objects = []
-    for object_class, object_idx in zip(scene_objects, scene_object_idx):
-        path_to_file = dataloader.get_path(object_class, object_idx)
-        v, f = pcu.load_mesh_vf(path_to_file)
-        objects.append(
-            Object(
-                path=path_to_file,
-                num_points=object_num_samples[object_idx],
-                num_rend_points=int(object_num_samples[object_idx] / num_views),
-                num_views=num_views,
-                min_angle=0,
-                max_angle=360,
-                camera=camera,
-                translation=object_centers[object_idx],
-                fix_scaling=False,
-            )
-        )
+    # Scene's Objects
+    objects = parse_scene_objects(config, dataloader, camera)
 
-    # # Metrics as Views are gradually added
-    # gradual_scene = Scene(objects)
-    # gradual_metrics = []
+    # Metrics as Views are gradually added
+    gradual_scene = Scene(objects)
+    gradual_metrics = []
     # for view_idx in range(num_views):
     #     for obj_idx in range(len(objects)):
     #         gradual_scene.add_to_scene(obj_idx, view_idx)
@@ -81,43 +104,4 @@ if __name__ == "__main__":
     #         gradual_scene.visualize()
 
     # plot_gradual_metrics(gradual_metrics)
-    # # gradual_scene.visualize()
-
-    # # Metrics as Views are gradually added
-    # rotations = np.linspace(0, 180, 19)
-    # gradual_metrics = []
-    # for rotation in rotations:
-    #     gradual_scene = Scene(objects)
-    #     for view_idx in range(num_views):
-    #         for obj_idx in range(len(objects)):
-    #             gradual_scene.add_to_scene(obj_idx, view_idx, yaw_angle=rotation)
-    #     gradual_metrics.append(
-    #         (
-    #             gradual_scene.get_MAD(),
-    #             gradual_scene.get_scene_coverage(epsilon=1.0),
-    #         )
-    #     )
-
-    # plot_gradual_metrics(gradual_metrics, x_label="Iterations", x_values=rotations)
-    # # gradual_scene.visualize()
-
-    # Scene as if more data retained
-    scene = Scene(objects)
-    for view_idx in range(num_views):
-        for obj_idx in range(1, len(objects)):
-            scene.add_to_scene(obj_idx, view_idx)
-    scene.visualize()
-    adding_object_metrics = []
-    adding_object_metrics.append(
-        (scene.get_MAD(), scene.get_scene_coverage(epsilon=1.0))
-    )
-    for i in range(4):
-        yaw_angle = 0
-        if i >= 1:
-            yaw_angle = 20
-        scene.add_to_scene(0, i, yaw_angle=yaw_angle)
-        adding_object_metrics.append(
-            (scene.get_MAD(), scene.get_scene_coverage(epsilon=0.5))
-        )
-        scene.visualize()
-    plot_gradual_metrics(adding_object_metrics, x_label="Added Object")
+    gradual_scene.visualize()

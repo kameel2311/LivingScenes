@@ -329,9 +329,15 @@ class Scene:
     def visualize(self):
         print(f"Scene Shape: {self._gt_scene_pointcloud.shape}")
 
+        try:
+            overlay_pointcloud = self.get_simulated_scene()
+        except ValueError:
+            overlay_pointcloud = None
+            print("NOTE: No objects added to the scene")
+
         draw_point_cloud(
             self._gt_scene_pointcloud,
-            overlay_pointcloud=self.get_simulated_scene(),
+            overlay_pointcloud=overlay_pointcloud,
             title="Simulated Scene",
         )
 

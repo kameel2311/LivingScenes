@@ -1,0 +1,41 @@
+experiment_name: partial_visibility
+
+# Universal Object Settings
+object_settings:
+  number_views: 4
+  min_angle: 0
+  max_angle: 360
+  number_points: 400
+  number_rendered_points: 100
+  scaling_mode: "class_based"
+  adapt_number_points: True
+  verbose: True
+
+# Scene Settings
+camera:
+  scale: 1
+  image_height: 500
+  image_width: 500
+  fx: 250
+  fy: 250
+
+dataset: "ModelNet10"
+objects:
+  - class: "chair"
+    object_idx: 0
+  - class: "table"
+    object_idx: 1
+  - class: "sofa"
+    object_idx: 2
+  - class: "bed"
+    object_idx: 0
+  - class: "desk"
+    object_idx: 1
+  - class: "chair"
+    object_idx: 2
+  - class: "table"
+    object_idx: 4
+  - class: "sofa"
+    object_idx: 5
+  - class: "bed"
+    object_idx: 3
