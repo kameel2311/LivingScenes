@@ -4,6 +4,7 @@
 import os
 import sys
 import yaml
+import argparse
 import numpy as np
 import point_cloud_utils as pcu
 import matplotlib.pyplot as plt
@@ -154,10 +155,18 @@ def plot_object_metrics(**data_dicts):
     plt.show()
 
 
-def main():
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Run VN Simulation on defined Scenario"
+    )
+    parser.add_argument("--scenario", help="Scneario Config File", required=True)
+    return parser.parse_args()
+
+
+def main(args):
     # Load the configuration file
-    experiment_config_name = "missed_reobservation.yaml"
-    with open(os.path.join("scenarios", experiment_config_name), "r") as file:
+    # experiment_config_name = "missed_reobservation.yaml"
+    with open(os.path.join("scenarios", args.scenario), "r") as file:
         config = yaml.load(file, Loader=yaml.FullLoader)
 
     # Setting the Random Seed
@@ -198,9 +207,6 @@ def main():
         panoptic=panoptic_object_metrics, vn_enchanced=vn_enhanced_object_metrics
     )
 
-    print(panoptic_object_metrics)
-    print(vn_enhanced_object_metrics)
-
 
 if __name__ == "__main__":
 
@@ -208,4 +214,6 @@ if __name__ == "__main__":
     #       pointclouds rather than uniformly having the objects to same scale -> DONE ?
     #       2) Implement the subsampling of the object pointclouds
     #       3) TSDF Integration and Sampling per object
-    main()
+
+    args = parse_args()
+    main(args)
