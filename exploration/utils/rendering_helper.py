@@ -127,7 +127,7 @@ def get_circle_poses(
     else:
         thetas = np.random.uniform(angle_lower, angle_upper, num_points)
 
-    print("Thetas: ", np.rad2deg(thetas))
+    # print("Thetas: ", np.rad2deg(thetas))
 
     world_camera_poses = []
     pyrender_camera_poses = []

@@ -42,6 +42,7 @@ class Object:
     def __init__(
         self,
         semantic_class,
+        semantic_idx,
         path,
         num_points,  # MINIMUM NUMBER OF POINTS
         num_rend_points,  # NUMBER OF POINTS TO RENDER
@@ -59,6 +60,7 @@ class Object:
         verbose=False,
     ):
         self.semantic_class = semantic_class
+        self.semantic_idx = semantic_idx
         self.vertices, self.faces = pcu.load_mesh_vf(path)
         self.num_points = num_points
         self.num_rend_points = num_rend_points
@@ -228,10 +230,6 @@ class Object:
         assert len(self._depth_images), "No images have been saved"
         return self._depth_images
 
-    # TODO: Implement this
-    def add_to_submap(self, rendered_idx):
-        pass
-
     def visualize(self, depth=False):
         for i in range(self.num_views):
             draw_point_cloud(
@@ -246,6 +244,7 @@ class Object:
                 plt.title(f"Depth Map {i}")
                 plt.show()
 
+    # TODO: FIX THIS BUG
     def sample_pointcloud(self, num_points: int):
         pointcloud = sample_mesh_random(
             self.vertices, self.faces, num_samples=num_points
@@ -258,6 +257,20 @@ class Object:
     def get_object_xy_radius(self):
         centered_pointcloud, _ = center_pointcloud(self._pointcloud)
         return np.max(np.linalg.norm(centered_pointcloud[:, :2], axis=1))
+
+    def get_object_MAD(self, used_views: list):
+        merged_rendered_pointclouds = np.concatenate(
+            [self._rendered_views[i] for i in used_views], axis=0
+        )
+        return mean_absolute_distance(self._pointcloud, merged_rendered_pointclouds)
+
+    def get_object_coverage(self, used_views: list, epsilon=0.1):
+        merged_rendered_pointclouds = np.concatenate(
+            [self._rendered_views[i] for i in used_views], axis=0
+        )
+        return pointcloud_coverage(
+            self._pointcloud, merged_rendered_pointclouds, epsilon
+        )
 
 
 class Scene:
@@ -302,6 +315,40 @@ class Scene:
     def get_gt_scene(self):
         return self._gt_scene_pointcloud
 
+    def inflict_scene_changes(self, changes_dict: dict):
+        # Add Objects wrt to Visiblity
+        gradual_metrics = []
+        per_object_gradual_metrics = {}
+        for idx in range(len(self.objects)):
+            if idx in changes_dict["changed_objects"]:
+                visibility = changes_dict["changed_objects_visibility"]
+            else:
+                visibility = changes_dict["unchanged_objects_visibility"]
+
+            # Sequential Visibility Assumed
+            max_view_id = int(visibility * self.objects[idx].num_views)
+            view_ids = []  # If Sequential is no longer used in future
+            for view_id in range(max_view_id):
+                view_ids.append(view_id)
+                self.add_to_scene(idx, view_id)
+            # Scene Metrics
+            gradual_metrics.append(
+                (
+                    self.get_scene_MAD(),
+                    self.get_scene_coverage(epsilon=changes_dict["coverage_epsilon"]),
+                )
+            )
+            # Per Object Metrics
+            per_object_gradual_metrics[
+                f"{self.objects[idx].semantic_class}_{self.objects[idx].semantic_idx}"
+            ] = (
+                self.objects[idx].get_object_MAD(view_ids),
+                self.objects[idx].get_object_coverage(
+                    view_ids, epsilon=changes_dict["coverage_epsilon"]
+                ),
+            )
+        return gradual_metrics, per_object_gradual_metrics
+
     # TODO: Implement subsampling from object to have better object pc distribution
     def add_to_scene(self, object_idx, rendered_idx, yaw_angle=None):
         if (object_idx, rendered_idx) in self._simulated_scene_history:
@@ -327,7 +374,7 @@ class Scene:
             raise ValueError("No objects added to the scene")
 
     def visualize(self):
-        print(f"Scene Shape: {self._gt_scene_pointcloud.shape}")
+        # print(f"Scene Shape: {self._gt_scene_pointcloud.shape}")
 
         try:
             overlay_pointcloud = self.get_simulated_scene()
@@ -341,7 +388,7 @@ class Scene:
             title="Simulated Scene",
         )
 
-    def get_MAD(self):
+    def get_scene_MAD(self):
         if len(self._simulated_scene_history):
             return mean_absolute_distance(
                 self._gt_scene_pointcloud, self.get_simulated_scene()
@@ -356,6 +403,10 @@ class Scene:
             )
         else:
             raise ValueError("No objects added to the scene")
+
+    def clear_simulated_scene(self):
+        self._simulated_scene_pointcloud = []
+        self._simulated_scene_history = []
 
 
 if __name__ == "__main__":
