@@ -56,3 +56,5 @@ RUN pip install -U python-pycg[all] -f https://pycg.huangjh.tech/packages/index.
 
 WORKDIR /workspace
 RUN pip install -r requirements.txt
+
+#pyrender 0.1.25 , conda install -c conda-forge networkx=2.5
