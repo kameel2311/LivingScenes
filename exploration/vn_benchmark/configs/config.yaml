@@ -1,0 +1,49 @@
+# Benchmark Config
+dataset: 
+  name: "ModelNet10"
+  object_idx_limit: 100
+
+random_seed: 0
+
+# Universal Object Settings
+object_settings:
+  number_views: &number_views 4
+  min_angle: 0
+  max_angle: 360
+  number_points: 1000
+  number_rendered_points: 250
+  scaling_mode: &scaling_mode "rendering" # To enforce same number of points for all objects
+  adapt_number_points: False
+  verbose: True
+
+# Rendering Settings
+camera:
+  scale: 1
+  image_height: 500
+  image_width: 500
+  fx: 250
+  fy: 250
+
+# Object Selection Settings
+# Will be moved from Object Collection Settings to here
+objects:
+  - class: "chair" #0
+    object_idx: 0
+  - class: "table" #0
+    object_idx: 0
+
+# Object Collection Settings
+object_collection:
+  object_collection_sampler:
+    number_collections: 100
+    number_objects_per_collection: 2
+    allow_same_class: False
+    excluded_classes:
+      - "bed"
+      - "desk"
+
+  object_collection_settings:
+    object_scaling_mode: *scaling_mode
+    number_views: *number_views
+    lhs_mode: "tracked" # scan, tracked
+    rhs_mode: "mesh" # next_scan, mesh, full_scan

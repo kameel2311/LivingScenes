@@ -73,9 +73,9 @@ def matrix_fitness_metric(similarity_matrix, average_along_matrix=True):
         return diag_mean, off_diag_mean, off_diag_std
     else:
         return (
+            similarity_matrix.diag(),
             off_diag_means,
             off_diag_stds,
-            similarity_matrix.diag(),
         )
 
 
