@@ -343,33 +343,34 @@ class Scene:
             # Check if Rotation Error is Inflicted
             yaw_angle = None
             delta_trans = None
-            if changes_dict["pose_error"] is not None:
-                if changes_dict["pose_error"]["rotation"] is not None:
-                    rotational_error = changes_dict["pose_error"]["rotation"]
-                    if rotational_error["sampling_distribution"] == "uniform":
-                        yaw_angle = np.random.uniform(
-                            rotational_error["min_angle_error"],
-                            rotational_error["max_angle_error"],
-                        )
-                    else:
-                        raise NotImplementedError(
-                            "Sampling Distribution not implemented yet"
-                        )
-                if changes_dict["pose_error"]["translation"] is not None:
-                    translation_error = changes_dict["pose_error"]["translation"]
-                    if translation_error["sampling_distribution"] == "uniform":
-                        delta_trans = np.append(
-                            np.random.uniform(
-                                translation_error["min_displacement_xy"],
-                                translation_error["max_displacement_xy"],
-                                size=(2),
-                            ),
-                            0,
-                        )
-                    else:
-                        raise NotImplementedError(
-                            "Sampling Distribution not implemented yet"
-                        )
+            if idx in changes_dict["changed_objects"]:
+                if changes_dict["pose_error"] is not None:
+                    if changes_dict["pose_error"]["rotation"] is not None:
+                        rotational_error = changes_dict["pose_error"]["rotation"]
+                        if rotational_error["sampling_distribution"] == "uniform":
+                            yaw_angle = np.random.uniform(
+                                rotational_error["min_angle_error"],
+                                rotational_error["max_angle_error"],
+                            )
+                        else:
+                            raise NotImplementedError(
+                                "Sampling Distribution not implemented yet"
+                            )
+                    if changes_dict["pose_error"]["translation"] is not None:
+                        translation_error = changes_dict["pose_error"]["translation"]
+                        if translation_error["sampling_distribution"] == "uniform":
+                            delta_trans = np.append(
+                                np.random.uniform(
+                                    translation_error["min_displacement_xy"],
+                                    translation_error["max_displacement_xy"],
+                                    size=(2),
+                                ),
+                                0,
+                            )
+                        else:
+                            raise NotImplementedError(
+                                "Sampling Distribution not implemented yet"
+                            )
 
             for view_id in range(max_view_id):
                 view_ids.append(view_id)
