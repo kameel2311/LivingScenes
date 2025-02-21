@@ -37,6 +37,9 @@ class Camera:
     def get_intrinsics(self):
         return self.k
 
+    def get_resolution(self):
+        return self.image_width, self.image_height
+
 
 def transformation_matrix(rotation, translation):
     """
@@ -124,7 +127,7 @@ def get_circle_poses(
     else:
         thetas = np.random.uniform(angle_lower, angle_upper, num_points)
 
-    print("Thetas: ", np.rad2deg(thetas))
+    # print("Thetas: ", np.rad2deg(thetas))
 
     world_camera_poses = []
     pyrender_camera_poses = []
@@ -175,6 +178,8 @@ def render_point_cloud_from_viewpoint(
     mesh_scale=1,
     pointcloud=None,
     visualize=False,
+    return_depth=False,
+    mesh_transform=None,
 ):
 
     # Rendering
@@ -184,7 +189,11 @@ def render_point_cloud_from_viewpoint(
     mesh = pyrender.Mesh.from_trimesh(mesh)
 
     # Define Scene and Renderer
-    scene.add(mesh, pose=PY_T_W)
+    if mesh_transform is not None:
+        mesh_pose = PY_T_W @ mesh_transform
+    else:
+        mesh_pose = PY_T_W
+    scene.add(mesh, pose=mesh_pose)
     scene.add(camera_py, pose=pyrender_pose)
     renderer = pyrender.OffscreenRenderer(image_width, image_height)
 
@@ -222,7 +231,8 @@ def render_point_cloud_from_viewpoint(
                 "Point Cloud with Circular camera and visible points",
                 cameras=[(k, [image_width, image_height], world_pose)],
             )
-
+    if return_depth:
+        return visible_points, depth
     return visible_points
 
 
@@ -276,7 +286,6 @@ if __name__ == "__main__":
         scale=1, image_height=image_height, image_width=image_width, fx=250, fy=250
     )
     k = camera.get_intrinsics()
-    num_cameras = 5
 
     # Loop through the instances
     # for object_class in ["chair", "table", "monitor", "sofa"]:
@@ -310,7 +319,6 @@ if __name__ == "__main__":
 
             # Loading Mesh and Setup Camera
             camera_py = camera.get_pyrender_camera()
-            renderer = pyrender.OffscreenRenderer(image_width, image_height)
 
             # Visualize all camera poses
             visualized_cameras = [
@@ -325,7 +333,7 @@ if __name__ == "__main__":
 
             # Loop through the camera poses
             temp_distance = []
-            for i in range(num_cameras):
+            for i in range(NUM_VIEWPOINTS):
                 rendered_pc = render_point_cloud_from_viewpoint(
                     v,
                     f,

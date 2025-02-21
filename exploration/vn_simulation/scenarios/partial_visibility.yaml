@@ -1,0 +1,71 @@
+experiment_name: partial_visibility
+random_seed: 0
+
+# Universal Object Settings
+object_settings:
+  number_views: 4
+  min_angle: 0
+  max_angle: 360
+  number_points: 400
+  number_rendered_points: 100
+  scaling_mode: "class_based"
+  adapt_number_points: True
+  verbose: False
+
+# Scene Settings
+camera:
+  scale: 1
+  image_height: 500
+  image_width: 500
+  fx: 250
+  fy: 250
+
+dataset: "ModelNet10"
+objects:
+  - class: "chair" #0
+    object_idx: 0
+  - class: "table" #1
+    object_idx: 1
+  - class: "sofa"  #2
+    object_idx: 2
+  - class: "bed"   #3
+    object_idx: 0
+  - class: "desk"  #4
+    object_idx: 1
+  - class: "chair" #5 
+    object_idx: 2
+  - class: "table" #6
+    object_idx: 4
+  - class: "sofa"  #7
+    object_idx: 5
+  - class: "bed"   #8
+    object_idx: 3
+
+# Assumption that objects were {unchanged_objects_visibility} visible before change
+reconstruction:
+  panoptic:
+    unchanged_objects_visibility: &unchanged_objects_visibility 1
+    changed_objects: &changed_objects [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    skip_objects_from_gt: &skip_objects_from_gt []
+    map_skipped_objects: False
+    changed_objects_visibility: 0.25 # Starting from index 0
+    coverage_epsilon: 0.05
+    pose_error: # Keep Blank as None
+
+  vn_enhanced:
+    unchanged_objects_visibility: *unchanged_objects_visibility
+    changed_objects: *changed_objects
+    skip_objects_from_gt: *skip_objects_from_gt
+    map_skipped_objects: False
+    changed_objects_visibility: 1 # Starting from index 0
+    coverage_epsilon: 0.05
+    pose_error:
+      rotation: 
+        min_angle_error: 0
+        max_angle_error: 20
+        sampling_distribution: "uniform"
+      translation:
+        min_displacement_xy: 0
+        max_displacement_xy: 0.1
+        sampling_distribution: "uniform"
+
