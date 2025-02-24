@@ -200,6 +200,49 @@ def plot_dataset(
     plt.show()
 
 
+def plot_views_subplots(dataset, num_views):
+    fig, axes = plt.subplots(num_views, 1, figsize=(10, 6 * num_views))
+    if num_views == 1:
+        axes = [axes]  # Ensure axes is iterable when there's only one subplot
+
+    for i, view in enumerate(range(num_views)):
+        ax = axes[i]
+        diag_mean = dataset[f"view_{view}_diag_mean"]
+        off_diag_mean = dataset[f"view_{view}_off_diag_mean"]
+
+        sns.histplot(
+            [item for sublist in diag_mean for item in sublist],
+            bins=10,
+            kde=True,
+            color="blue",
+            label=f"Diagonal Means (View {view})",
+            alpha=0.6,
+            stat="density",
+            ax=ax,
+        )
+
+        sns.histplot(
+            [item for sublist in off_diag_mean for item in sublist],
+            bins=10,
+            kde=True,
+            color="orange",
+            label=f"Off-Diagonal Means (View {view})",
+            alpha=0.6,
+            stat="density",
+            linestyle="dashed",
+            ax=ax,
+        )
+
+        ax.set_xlabel("Values")
+        ax.set_ylabel("Density")
+        ax.set_title(f"Histogram and Density for View {view}")
+        ax.legend()
+        ax.grid(axis="y", alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
+
+
 def plot_rre(rre, labels=None):
     """
     Plots historgram of the Rotation Error

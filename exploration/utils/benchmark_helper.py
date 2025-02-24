@@ -1,10 +1,12 @@
 import sys
 import math
+import random
 import numpy as np
 import point_cloud_utils as pcu
 import torch
 from collections import defaultdict  # Such a cool find btw
 from matplotlib import pyplot as plt
+from itertools import chain
 
 sys.path.append("../")
 from utils.pointcloud_helper import (
@@ -31,6 +33,7 @@ from utils.metrics_helper import (
     matrix_angular_similarity,
     plot_correlation,
     compute_pointcloud_overlap,
+    plot_views_subplots,
 )
 
 
@@ -64,7 +67,13 @@ class ObjectCollection:
         self.config = object_collection_config
         self.lhs_mode = self.config["lhs_mode"]
         self.rhs_mode = self.config["rhs_mode"]
-        self.num_views = self.config["number_views"]
+
+        if self.rhs_mode == "mesh":
+            self.num_views = self.config["number_views"]
+        elif self.rhs_mode == "next_scan":
+            self.num_views = self.config["number_views"] - 1
+        else:
+            raise ValueError(f"Invalid mode: {self.rhs_mode}")
 
         assert (
             self.config["object_scaling_mode"] == "rendering"
@@ -73,13 +82,8 @@ class ObjectCollection:
     def get_view_pointclouds(self, idx):
         lhs_pointclouds = []
         rhs_pointclouds = []
-        if idx >= self.num_views and self.lhs_mode == "scan":
-            raise ValueError(f"Index out of bounds for LHS in mode: {self.lhs_mode}")
-
-        if idx + 1 == self.num_views and self.rhs_mode == "next_scan":
-            raise ValueError(
-                f"Index + 1 out of bounds for RHS in mode: {self.rhs_mode}"
-            )
+        if idx == self.num_views:
+            raise ValueError("Index out of bounds")
 
         for object in self.objects:
             if self.lhs_mode == "scan":
@@ -99,15 +103,106 @@ class ObjectCollection:
         return lhs_pointclouds, rhs_pointclouds
 
 
+# TODO: Add intraclass
+class CollectionGenerator:
+    def __init__(self, dataloader, config, camera):
+        self.dataloader = dataloader
+        self.config = config
+        self.camera = camera
+        self.prepare_collections()
+
+    def parse_scene_object(self, semantic_class, object_idx):
+        # Define Objects
+        object_settings = self.config["object_settings"]
+        path_to_file = self.dataloader.get_path(semantic_class, object_idx)
+        object = ObjectTracked(
+            semantic_class=semantic_class,
+            semantic_idx=object_idx,
+            path=path_to_file,
+            num_points=object_settings["number_points"],
+            num_rend_points=object_settings["number_rendered_points"],
+            num_views=object_settings["number_views"],
+            min_angle=object_settings["min_angle"],
+            max_angle=object_settings["max_angle"],
+            camera=self.camera,
+            center=None,
+            scaling_Mode=object_settings["scaling_mode"],
+            adapt_num_points=object_settings["adapt_number_points"],
+            verbose=object_settings["verbose"],
+        )
+
+        return object
+
+    def prepare_collections(self):
+        self.number_collections = self.config["object_collection"]["number_collections"]
+        excluded_classes = self.config["object_collection"]["excluded_classes"]
+
+        # Setting the Data Loader
+        self.object_collection_settings = self.config["object_collection"][
+            "object_collection_settings"
+        ]
+        self.object_collection_sampler = self.config["object_collection"][
+            "object_collection_sampler"
+        ]
+
+        # Filter out the excluded classes
+        if excluded_classes is None:
+            self._allowed_classes = self.dataloader.object_classes
+        else:
+            self._allowed_classes = [
+                semantic_class
+                for semantic_class in self.dataloader.object_classes
+                if semantic_class not in excluded_classes
+            ]
+
+    def get_allowed_classes(self):
+        return self._allowed_classes
+
+    def generate_collections(self):
+        # Benchmark Type
+        if self.object_collection_sampler["type"] == "interclass":
+            semantic_classes = self._allowed_classes.copy()
+            collection_count = 0
+
+            # Generate Object Collections
+            while collection_count < self.number_collections:
+                if self.object_collection_sampler["index_selection"] == "sequential":
+                    semantic_idxs = np.ones(len(semantic_classes)) * collection_count
+                elif self.object_collection_sampler["index_selection"] == "random":
+                    semantic_idxs = random.choices(
+                        list(range(self.dataloader.object_idx_limit)),
+                        k=len(semantic_classes),
+                    )
+                else:
+                    raise ValueError("Invalid index selection mode")
+                objects = []
+                for semantic_class, object_idx in zip(semantic_classes, semantic_idxs):
+                    objects.append(self.parse_scene_object(semantic_class, object_idx))
+                object_collection = ObjectCollection(
+                    objects, self.object_collection_settings
+                )
+                yield object_collection
+
+                # Increment the Collection Count
+                collection_count += 1
+        elif self.object_collection_sampler["type"] == "intraclass":
+            raise NotImplementedError("Intraclass Sampler is not implemented yet")
+        else:
+            raise ValueError("Invalid Object Collection Sampler Type")
+
+
 class VNBenchmark:
     def __init__(self, model):
         self.model = model
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         torch.set_default_dtype(torch.float64)
 
+        self.dataset_similarity_per_view_metrics = defaultdict(list)
+
     def infer_collection(self, object_collection: ObjectCollection):
         collection_similarity_per_view_metrics = defaultdict(list)
-        for idx in range(object_collection.num_views):
+        self.num_views = object_collection.num_views
+        for idx in range(self.num_views):
             lhs_pointclouds, rhs_pointclouds = object_collection.get_view_pointclouds(
                 idx
             )
@@ -150,3 +245,36 @@ class VNBenchmark:
             )
             collection_similarity_per_view_metrics["off_diag_std"].append(off_diag_std)
         return collection_similarity_per_view_metrics
+
+    def collect_metrics(
+        self, similarity_metric, classes
+    ):  # TODO: Adapt for Intraclass too
+        # NOW ONLY FOR INTERCLASS
+        diagonal_means = similarity_metric["diag_mean"]
+        off_diagonal_means = similarity_metric["off_diag_mean"]
+        off_diagonal_stds = similarity_metric["off_diag_std"]
+
+        # Convert GPU Tensor to CPU List
+        diagonal_means = torch.stack(diagonal_means).cpu().numpy().tolist()
+        assert (
+            len(diagonal_means)
+            == len(off_diagonal_means)
+            == len(off_diagonal_stds)
+            == self.num_views
+        )
+
+        for i in range(self.num_views):
+            self.dataset_similarity_per_view_metrics[f"view_{i}_diag_mean"].append(
+                diagonal_means[i]
+            )
+
+            self.dataset_similarity_per_view_metrics[f"view_{i}_off_diag_mean"].append(
+                off_diagonal_means[i]
+            )
+
+            self.dataset_similarity_per_view_metrics[f"view_{i}_off_diag_std"].append(
+                off_diagonal_stds[i]
+            )
+
+    def plot_metrics(self):
+        plot_views_subplots(self.dataset_similarity_per_view_metrics, self.num_views)

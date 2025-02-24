@@ -35,10 +35,10 @@ objects:
 
 # Object Collection Settings
 object_collection:
-  number_collections: 10
+  number_collections: 100
   excluded_classes:
-          - "bed"
-          - "desk"
+          # - "bed"
+          # - "desk"
 
   object_collection_sampler:
     type: "interclass" # interclass, intraclass TODO: Add intraclass
@@ -48,4 +48,4 @@ object_collection:
     object_scaling_mode: *scaling_mode
     number_views: *number_views
     lhs_mode: "tracked" # scan, tracked
-    rhs_mode: "mesh" # next_scan, mesh, full_scan
+    rhs_mode: "mesh" # next_scan, mesh

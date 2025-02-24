@@ -3,14 +3,13 @@ import sys
 import yaml
 import argparse
 import numpy as np
-import random
 import matplotlib.pyplot as plt
 from torch import manual_seed as torch_manual_seed
 
 sys.path.append("../")
 from utils.dataloader import Dataloader
 from utils.rendering_helper import Camera
-from utils.benchmark_helper import ObjectTracked, ObjectCollection, VNBenchmark
+from utils.benchmark_helper import VNBenchmark, CollectionGenerator
 
 sys.path.append("../../")
 from lib_more.more_solver import More_Solver
@@ -28,29 +27,6 @@ def parse_scene_camera(config):
     )
 
 
-def parse_scene_object(config, dataloader, camera, semantic_class, object_idx):
-    # Define Objects
-    object_settings = config["object_settings"]
-    path_to_file = dataloader.get_path(semantic_class, object_idx)
-    object = ObjectTracked(
-        semantic_class=semantic_class,
-        semantic_idx=object_idx,
-        path=path_to_file,
-        num_points=object_settings["number_points"],
-        num_rend_points=object_settings["number_rendered_points"],
-        num_views=object_settings["number_views"],
-        min_angle=object_settings["min_angle"],
-        max_angle=object_settings["max_angle"],
-        camera=camera,
-        center=None,
-        scaling_Mode=object_settings["scaling_mode"],
-        adapt_num_points=object_settings["adapt_number_points"],
-        verbose=object_settings["verbose"],
-    )
-
-    return object
-
-
 def load_vn_model():
     # Load the Model
     ckpt = "../../weights"
@@ -59,58 +35,6 @@ def load_vn_model():
     solver = More_Solver(solver_cfg)
     model = solver.model
     return model
-
-
-# TODO: Add intraclass
-def collection_generator(dataloader, config):
-    number_collections = config["object_collection"]["number_collections"]
-    excluded_classes = config["object_collection"]["excluded_classes"]
-
-    # Setting the Data Loader
-    object_collection_settings = config["object_collection"][
-        "object_collection_settings"
-    ]
-    object_collection_sampler = config["object_collection"]["object_collection_sampler"]
-
-    # Filter out the excluded classes
-    allowed_classes = [
-        semantic_class
-        for semantic_class in dataloader.object_classes
-        if semantic_class not in excluded_classes
-    ]
-
-    # Benchmark Type
-    if object_collection_sampler["type"] == "interclass":
-        semantic_classes = allowed_classes.copy()
-        collection_count = 0
-
-        # Generate Object Collections
-        while collection_count < number_collections:
-            if object_collection_sampler["index_selection"] == "sequential":
-                semantic_idxs = np.ones(len(semantic_classes)) * collection_count
-            elif object_collection_sampler["index_selection"] == "random":
-                semantic_idxs = random.choices(
-                    list(range(dataloader.object_idx_limit)),
-                    k=len(semantic_classes),
-                )
-            else:
-                raise ValueError("Invalid index selection mode")
-            objects = []
-            for semantic_class, object_idx in zip(semantic_classes, semantic_idxs):
-                objects.append(
-                    parse_scene_object(
-                        config, dataloader, camera, semantic_class, object_idx
-                    )
-                )
-            object_collection = ObjectCollection(objects, object_collection_settings)
-            yield object_collection
-
-            # Increment the Collection Count
-            collection_count += 1
-    elif object_collection_sampler["type"] == "intraclass":
-        raise NotImplementedError("Intraclass Sampler is not implemented yet")
-    else:
-        raise ValueError("Invalid Object Collection Sampler Type")
 
 
 if __name__ == "__main__":
@@ -130,11 +54,14 @@ if __name__ == "__main__":
 
     # Parse the Scene
     camera = parse_scene_camera(config)
-    collection_generator = collection_generator(dataloader, config)
+    collection_generator = CollectionGenerator(dataloader, config, camera)
+    semantic_classes = collection_generator.get_allowed_classes()
 
     # Load the Model
     benchmark = VNBenchmark(load_vn_model())
 
-    for object_collection in collection_generator:
+    for object_collection in collection_generator.generate_collections():
         metrics = benchmark.infer_collection(object_collection)
-        print(metrics)
+        benchmark.collect_metrics(metrics, semantic_classes)
+
+    benchmark.plot_metrics()
