@@ -3,6 +3,7 @@ dataset:
   name: "ModelNet10"
   object_idx_limit: 100
 
+# Numpy and Torch Seed
 random_seed: 0
 
 # Universal Object Settings
@@ -14,7 +15,7 @@ object_settings:
   number_rendered_points: 250
   scaling_mode: &scaling_mode "rendering" # To enforce same number of points for all objects
   adapt_number_points: False
-  verbose: True
+  verbose: False
 
 # Rendering Settings
 camera:
@@ -34,14 +35,15 @@ objects:
 
 # Object Collection Settings
 object_collection:
-  object_collection_sampler:
-    number_collections: 100
-    number_objects_per_collection: 2
-    allow_same_class: False
-    excluded_classes:
-      - "bed"
-      - "desk"
+  number_collections: 10
+  excluded_classes:
+          - "bed"
+          - "desk"
 
+  object_collection_sampler:
+    type: "interclass" # interclass, intraclass TODO: Add intraclass
+    index_selection: "sequential" # random, sequential
+        
   object_collection_settings:
     object_scaling_mode: *scaling_mode
     number_views: *number_views
