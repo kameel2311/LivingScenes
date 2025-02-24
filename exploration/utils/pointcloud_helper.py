@@ -164,7 +164,7 @@ def path_generator(data_dir, object_class, file, instance):
     """
     Generate the path to the object instance
     """
-    instance_string = str(instance + 1).zfill(4)  # Starts from 1
+    instance_string = str(int(instance) + 1).zfill(4)  # Starts from 1
     path = os.path.join(
         data_dir, object_class, file, f"{object_class}_{instance_string}.off"
     )
