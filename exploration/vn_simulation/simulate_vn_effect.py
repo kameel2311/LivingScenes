@@ -5,6 +5,7 @@ import os
 import sys
 import yaml
 import argparse
+import random
 import numpy as np
 import point_cloud_utils as pcu
 import matplotlib.pyplot as plt
@@ -30,14 +31,22 @@ def parse_scene_objects(config, dataloader, camera):
     # Define Objects
     objects = []
     object_settings = config["object_settings"]
-    for object_metadata in config["objects"]:
-        path_to_file = dataloader.get_path(
-            object_metadata["class"], object_metadata["object_idx"]
-        )
+    object_loader = config["objects_loader"]
+    classes, idx_limit, _, _ = dataloader.get_metadata()
+
+    if object_loader["limit_to_classes"] is not None:
+        classes = object_loader["limit_to_classes"]
+
+    # Randomly Sample Objects
+    semantic_classes = random.choices(classes, k=object_loader["number_objects"])
+    semantic_idxs = random.choices(range(idx_limit), k=object_loader["number_objects"])
+
+    for semantic_class, semantic_idx in zip(semantic_classes, semantic_idxs):
+        path_to_file = dataloader.get_path(semantic_class, semantic_idx)
         objects.append(
             Object(
-                semantic_class=object_metadata["class"],
-                semantic_idx=object_metadata["object_idx"],
+                semantic_class=semantic_class,
+                semantic_idx=semantic_idx,
                 path=path_to_file,
                 num_points=object_settings["number_points"],
                 num_rend_points=object_settings["number_rendered_points"],
@@ -173,8 +182,7 @@ def main(args):
     np.random.seed(config["random_seed"])
 
     # Define the dataset to work with
-    dataloader = Dataloader(config["dataset"], None)
-    dataset_metadata = dataloader.get_metadata()
+    dataloader = Dataloader(config["dataset"]["name"], config["dataset"]["idx_limit"])
 
     # Parse the Scene
     camera = parse_scene_camera(config)
@@ -216,4 +224,5 @@ if __name__ == "__main__":
     #       3) TSDF Integration and Sampling per object
 
     args = parse_args()
+    assert args.scenario != "missed_reobservation.yaml", "Scenario Deprecated for now"
     main(args)

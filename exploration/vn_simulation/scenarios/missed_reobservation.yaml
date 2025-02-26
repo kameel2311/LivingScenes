@@ -1,3 +1,5 @@
+# CURRENTLY DEPREACATED
+
 experiment_name: missed_reobservation
 random_seed: 0
 
@@ -66,12 +68,12 @@ reconstruction:
     changed_objects_visibility: 1 # Starting from index 0
     coverage_epsilon: 0.05
     pose_error:
-      # rotation: 
-      #   min_angle_error: 0
-      #   max_angle_error: 20
-      #   sampling_distribution: "uniform"
-      # translation:
-      #   min_displacement_xy: 0
-      #   max_displacement_xy: 0.1
-      #   sampling_distribution: "uniform"
+      rotation: 
+        min_angle_error: 0
+        max_angle_error: 20
+        sampling_distribution: "uniform"
+      translation:
+        min_displacement_xy: 0
+        max_displacement_xy: 0.1
+        sampling_distribution: "uniform"
 

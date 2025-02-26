@@ -20,35 +20,28 @@ camera:
   fx: 250
   fy: 250
 
-dataset: "ModelNet10"
-objects:
-  - class: "chair" #0
-    object_idx: 0
-  - class: "table" #1
-    object_idx: 1
-  - class: "sofa"  #2
-    object_idx: 2
-  - class: "bed"   #3
-    object_idx: 0
-  - class: "desk"  #4
-    object_idx: 1
-  - class: "chair" #5 
-    object_idx: 2
-  - class: "table" #6
-    object_idx: 4
-  - class: "sofa"  #7
-    object_idx: 5
-  - class: "bed"   #8
-    object_idx: 3
+dataset: 
+  name: "ModelNet10"
+  idx_limit: &idx_limit 100
+
+objects_loader:
+  number_objects: 20
+  limit_to_classes: # None means all can be sampled from
+    - "chair"
+    - "table"
+    - "sofa"
+    - "bed"
+    - "desk"
 
 # Assumption that objects were {unchanged_objects_visibility} visible before change
 reconstruction:
   panoptic:
     unchanged_objects_visibility: &unchanged_objects_visibility 1
-    changed_objects: &changed_objects [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    # changed_objects: &changed_objects [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+    changed_objects: &changed_objects [0, 1, 6, 8, 10]
     skip_objects_from_gt: &skip_objects_from_gt []
     map_skipped_objects: False
-    changed_objects_visibility: 0.25 # Starting from index 0
+    changed_objects_visibility: 0.5 # Starting from index 0
     coverage_epsilon: 0.05
     pose_error: # Keep Blank as None
 
@@ -65,7 +58,9 @@ reconstruction:
         max_angle_error: 20
         sampling_distribution: "uniform"
       translation:
-        min_displacement_xy: 0
-        max_displacement_xy: 0.1
-        sampling_distribution: "uniform"
+        # min_displacement_xy: 0
+        # max_displacement_xy: 0.1
+        # sampling_distribution: "uniform"
+
+  
 
