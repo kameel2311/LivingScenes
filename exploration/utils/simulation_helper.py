@@ -337,8 +337,6 @@ class Scene:
         else:
             raise ValueError("Changed Objects not defined properly")
 
-        print(f"Changed Idxs: {changed_idxs}")
-
         for idx in range(len(self.objects)):
             if (
                 idx in changes_dict["skip_objects_from_gt"]
@@ -365,6 +363,11 @@ class Scene:
                             rotational_error["min_angle_error"],
                             rotational_error["max_angle_error"],
                         )
+                    if rotational_error["sampling_distribution"] == "normal":
+                        yaw_angle = np.random.normal(
+                            rotational_error["mean_angle_error"],
+                            rotational_error["std_angle_error"],
+                        )
                     else:
                         raise NotImplementedError(
                             "Sampling Distribution not implemented yet"
@@ -376,6 +379,15 @@ class Scene:
                             np.random.uniform(
                                 translation_error["min_displacement_xy"],
                                 translation_error["max_displacement_xy"],
+                                size=(2),
+                            ),
+                            0,
+                        )
+                    elif translation_error["sampling_distribution"] == "normal":
+                        delta_trans = np.append(
+                            np.random.normal(
+                                translation_error["mean_displacement_xy"],
+                                translation_error["std_displacement_xy"],
                                 size=(2),
                             ),
                             0,
@@ -418,7 +430,7 @@ class Scene:
             print("Object already added to the scene")
         else:
             object = self.objects[object_idx]
-            rendered_view = object.get_rendered_view(rendered_idx)
+            rendered_view = object.get_rendered_view(rendered_idx).copy()  # Immutable
             if yaw_angle is not None:
                 rendered_view, _ = rotate_pointcloud(
                     rendered_view,
@@ -487,6 +499,10 @@ class BenchmarkRunner:
         self.x_label = None
         self.plot_title = None
 
+        # For debugging
+        self.verbose = reconstruction_config["verbose"]
+        self.visualize = reconstruction_config["visualize"]
+
     def generate_run_settings(self):
         if self.config["run_type"] == "single":
             panoptic_run_settings = self.config["single_settings"]["panoptic"]
@@ -500,21 +516,61 @@ class BenchmarkRunner:
             ]
             study = self.config["study"]["name"]
             params = self.config["study"]["params"]
+            # Setting Plot Params
+            self.plot_title = f"{study} Benchmark"
+            self.x_label = f"{study} Values"
 
             # Parse the Settings
             if study == "percentage_changed_objects":
                 values = np.arange(
                     params["min"], params["max"] + params["step"], params["step"]
                 )
-                # Setting Plot Params
-                self.x_axis = values
-                self.x_label = "Percentage of Changed Objects"
-                self.plot_title = "Percentage of Changed Objects Benchmark"
-                print(f"Values: {values}")
                 for value in values:
                     panoptic_run_settings["changed_objects"] = value
                     vn_enhanced_run_settings["changed_objects"] = value
                     yield panoptic_run_settings, vn_enhanced_run_settings
+            elif study == "panoptic_visibility":
+                values = np.arange(
+                    params["min"], params["max"] + params["step"], params["step"]
+                )
+                for value in values:
+                    panoptic_run_settings["changed_objects_visibility"] = value
+                    yield panoptic_run_settings, vn_enhanced_run_settings
+            elif study == "vn_visibility":
+                values = np.arange(
+                    params["min"], params["max"] + params["step"], params["step"]
+                )
+                for value in values:
+                    vn_enhanced_run_settings["changed_objects_visibility"] = value
+                    yield panoptic_run_settings, vn_enhanced_run_settings
+            elif study == "rotation":  # Assuming Exact Values
+                values = np.arange(
+                    params["min"], params["max"] + params["step"], params["step"]
+                )
+                for value in values:
+                    vn_enhanced_run_settings["rotation"] = {
+                        "mean_angle_error": value,
+                        "std_angle_error": 0,
+                        "sampling_distribution": "normal",
+                    }
+                    yield panoptic_run_settings, vn_enhanced_run_settings
+            elif study == "translation":  # Assuming Exact Values
+                values = np.arange(
+                    params["min"], params["max"] + params["step"], params["step"]
+                )
+                for value in values:
+                    vn_enhanced_run_settings["translation"] = {
+                        "mean_displacement_xy": value,
+                        "std_displacement_xy": 0,
+                        "sampling_distribution": "normal",
+                    }
+                    yield panoptic_run_settings, vn_enhanced_run_settings
+            else:
+                raise NotImplementedError("Study Type not implemented yet")
+
+            # Set the X Axis Values
+            self.x_axis = values
+            print(f"Values: {values}")
         else:
             raise NotImplementedError("Benchmark Type not implemented yet")
 
@@ -526,15 +582,18 @@ class BenchmarkRunner:
             # Create Scene
             scene = Scene(self.objects)
 
-            print(f"Panoptic Settings: {panoptic_settings}")
-            print(f"VN Enhanced Settings: {vn_enhanced_settings}")
+            if self.verbose:
+                print(f"Panoptic Settings: {panoptic_settings}")
+                print(f"VN Enhanced Settings: {vn_enhanced_settings}")
 
             # Gather Panoptic Metrics
             scene.set_gt_scene(panoptic_settings)
             panoptic_scene_metrics, panoptic_object_metrics = (
                 scene.inflict_scene_changes(panoptic_settings)
             )
-            scene.visualize(title="Panoptic Scene")
+
+            if self.visualize:
+                scene.visualize(title="Panoptic Scene")
 
             # Gather Enhancement* Metrics
             scene.clear_scene()
@@ -542,7 +601,9 @@ class BenchmarkRunner:
             vn_enhanced_scene_metrics, vn_enhanced_object_metrics = (
                 scene.inflict_scene_changes(vn_enhanced_settings)
             )
-            scene.visualize(title="VN Enhanced Scene")
+
+            if self.visualize:
+                scene.visualize(title="VN Enhanced Scene")
 
             if self.config["run_type"] == "single":
                 self.panoptic_scene_metrics = panoptic_scene_metrics

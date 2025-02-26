@@ -19,10 +19,12 @@ camera:
   fx: 250
   fy: 250
 
+# Dataset Settings
 dataset: 
   name: "ModelNet10"
   idx_limit: &idx_limit 100
 
+# Objects in Scene Settings
 objects_loader:
   number_objects: 20
   limit_to_classes: # None means all can be sampled from
@@ -35,7 +37,9 @@ objects_loader:
 # Assumption that objects were {unchanged_objects_visibility} visible before change
 random_seed: 0 # Controls the Scene
 reconstruction:
-  run_type: single # single, benchmark
+  run_type: benchmark # single, benchmark
+  verbose: False
+  visualize: False
 
   # Regardless of Run Type
   universal_values:
@@ -45,7 +49,7 @@ reconstruction:
     coverage_epsilon: &coverage_epsilon 0.05
     
   study:
-    name: "percentage_changed_objects" # "percentage_changed_objects", "panoptic_visibility", "vn_visibility", "rotation", "translation" # Selects the study, others to default values 
+    name: "translation" # "percentage_changed_objects", "panoptic_visibility", "vn_visibility", "rotation", "translation" # Selects the study, others to default values 
                                        # Both                           Panoptic               Vn_enhanced     Vn_enhanced  Vn_enhanced  # Which Settings are Affected
     default_settings:
       panoptic:
@@ -55,23 +59,25 @@ reconstruction:
         coverage_epsilon: *coverage_epsilon
         rotation: # Keep Blank as None
         translation: # Keep Blank as None
-        changed_objects: 0.5 # To be defined  # Here defined as percentage of objects
-        changed_objects_visibility: 0.5 # To be defined
+        # Defaults of changed values
+        changed_objects: 0.5 
+        changed_objects_visibility: 0.5
 
       vn_enhanced:
         unchanged_objects_visibility: *unchanged_objects_visibility
         skip_objects_from_gt: *skip_objects_from_gt
         map_skipped_objects: *map_skipped_objects
         coverage_epsilon: *coverage_epsilon
+        # Defaults of changed values
         changed_objects: 0.5 # To be defined
         changed_objects_visibility: 1 # To be defined  .... # TODO Make this a study variable
         rotation: # To be defined
         translation: # To be defined
 
     params:
-      min: 0.1
-      max: 0.9
-      step: 0.1
+      min: 0.0
+      max: 0.1
+      step: 0.01
 
   # To Simulate Controlled Scenario for Visuals
   single_settings:
@@ -98,10 +104,19 @@ reconstruction:
         # min_angle_error: 0
         # max_angle_error: 20
         # sampling_distribution: "uniform"
+
+        # mean_angle_error: 0
+        # std_angle_error: 10
+        # sampling_distribution: "normal"
+
       translation:
         # min_displacement_xy: 0
         # max_displacement_xy: 0.1
         # sampling_distribution: "uniform"
+
+        # mean_displacement_xy: 0
+        # std_displacement_xy: 0.1
+        # sampling_distribution: "normal"
 
   
 
