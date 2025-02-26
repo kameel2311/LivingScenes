@@ -68,12 +68,19 @@ class ObjectCollection:
         self.lhs_mode = self.config["lhs_mode"]
         self.rhs_mode = self.config["rhs_mode"]
 
-        if self.rhs_mode == "mesh":
-            self.num_views = self.config["number_views"]
-        elif self.rhs_mode == "next_scan":
-            self.num_views = self.config["number_views"] - 1
+        if self.lhs_mode != "mesh":
+            if self.rhs_mode == "mesh":
+                self.num_views = self.config["number_views"]
+            elif self.rhs_mode == "next_scan":
+                self.num_views = self.config["number_views"] - 1
+            else:
+                raise ValueError(f"Invalid mode: RHS: {self.rhs_mode}")
+        elif self.lhs_mode == "mesh" and self.rhs_mode == "mesh":
+            self.num_views = 1
         else:
-            raise ValueError(f"Invalid mode: {self.rhs_mode}")
+            raise ValueError(
+                f"Invalid mode combination: LHS: {self.lhs_mode}, RHS: {self.rhs_mode}"
+            )
 
         assert (
             self.config["object_scaling_mode"] == "rendering"
@@ -91,6 +98,8 @@ class ObjectCollection:
             elif self.lhs_mode == "tracked":
                 object.add_active_tracked_pointcloud(idx)
                 lhs_pointclouds.append(object.get_active_tracked_pointcloud())
+            elif self.lhs_mode == "mesh":  # IMPLEMENT THIS for 1 round
+                lhs_pointclouds.append(object.get_pointcloud())
             else:
                 raise ValueError(f"Invalid mode: {self.lhs_mode}")
 
