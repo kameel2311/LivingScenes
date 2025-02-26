@@ -200,7 +200,7 @@ def plot_dataset(
     plt.show()
 
 
-def plot_views_subplots(dataset, num_views):
+def plot_similarity_subplots(dataset, num_views):
     fig, axes = plt.subplots(num_views, 1, figsize=(10, 6 * num_views))
     if num_views == 1:
         axes = [axes]  # Ensure axes is iterable when there's only one subplot
@@ -234,6 +234,36 @@ def plot_views_subplots(dataset, num_views):
         )
 
         ax.set_xlabel("Values")
+        ax.set_ylabel("Density")
+        ax.set_title(f"Histogram and Density for View {view}")
+        ax.legend()
+        ax.grid(axis="y", alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_rotational_subplots(dataset, num_views):
+    fig, axes = plt.subplots(num_views, 1, figsize=(10, 6 * num_views))
+    if num_views == 1:
+        axes = [axes]  # Ensure axes is iterable when there's only one subplot
+
+    for i, view in enumerate(range(num_views)):
+        ax = axes[i]
+        rotational_errors = dataset[f"view_{view}_rotation_error"]
+
+        sns.histplot(
+            [item for sublist in rotational_errors for item in sublist],
+            bins=10,
+            kde=True,
+            color="blue",
+            label=f"Rotational Error (View {view})",
+            alpha=0.6,
+            stat="density",
+            ax=ax,
+        )
+
+        ax.set_xlabel("Rotational Error")
         ax.set_ylabel("Density")
         ax.set_title(f"Histogram and Density for View {view}")
         ax.legend()

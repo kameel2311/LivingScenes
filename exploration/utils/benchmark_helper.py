@@ -33,14 +33,19 @@ from utils.metrics_helper import (
     matrix_angular_similarity,
     plot_correlation,
     compute_pointcloud_overlap,
-    plot_views_subplots,
+    plot_similarity_subplots,
+    plot_rotational_subplots,
 )
+
+sys.path.append("../../")
+from lib_more.pose_estimation import kabsch_transformation_estimation, rotation_error
 
 
 class ObjectTracked(Object):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._active_tracked_pointcloud = None
+        self._object_center = np.mean(self.get_pointcloud(), axis=0)
 
     def get_active_tracked_pointcloud(self):
         return self._active_tracked_pointcloud
@@ -206,10 +211,11 @@ class VNBenchmark:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         torch.set_default_dtype(torch.float64)
 
-        self.dataset_similarity_per_view_metrics = defaultdict(list)
+        self.dataset_per_view_metrics = defaultdict(list)
 
     def infer_collection(self, object_collection: ObjectCollection):
         collection_similarity_per_view_metrics = defaultdict(list)
+        collection_pose_error_per_view_metrics = defaultdict(list)
         self.num_views = object_collection.num_views
         for idx in range(self.num_views):
             lhs_pointclouds, rhs_pointclouds = object_collection.get_view_pointclouds(
@@ -237,8 +243,8 @@ class VNBenchmark:
 
             lhs_code_invariant = lhs_code["z_inv"]
             rhs_code_invariant = rhs_code["z_inv"]
-            # lhs_code_se3 = lhs_code["z_so3"] + lhs_code["t"]
-            # rhs_code_se3 = rhs_code["z_so3"] + rhs_code["t"]
+            lhs_code_se3 = lhs_code["z_so3"] + lhs_code["t"]
+            rhs_code_se3 = rhs_code["z_so3"] + rhs_code["t"]
 
             # compute the similarity matrix
             score_mat = matrix_angular_similarity(
@@ -253,15 +259,30 @@ class VNBenchmark:
                 off_diag_mean
             )
             collection_similarity_per_view_metrics["off_diag_std"].append(off_diag_std)
-        return collection_similarity_per_view_metrics
+
+            # Compute the Rotation Error
+            est_R, est_t, _, _ = kabsch_transformation_estimation(
+                lhs_code_se3.float(), rhs_code_se3.float()
+            )
+            rot_error = rotation_error(
+                est_R.cpu(), torch.stack([torch.eye(3)] * len(lhs_code_se3)).float()
+            ).numpy()
+            rot_error = np.reshape(rot_error, rot_error.shape[0])
+            collection_pose_error_per_view_metrics["rotation_error"].append(rot_error)
+
+        return (
+            collection_similarity_per_view_metrics,
+            collection_pose_error_per_view_metrics,
+        )
 
     def collect_metrics(
-        self, similarity_metric, classes
+        self, similarity_metric, pose_errors, classes
     ):  # TODO: Adapt for Intraclass too
         # NOW ONLY FOR INTERCLASS
         diagonal_means = similarity_metric["diag_mean"]
         off_diagonal_means = similarity_metric["off_diag_mean"]
         off_diagonal_stds = similarity_metric["off_diag_std"]
+        rotation_errors = pose_errors["rotation_error"]
 
         # Convert GPU Tensor to CPU List
         diagonal_means = torch.stack(diagonal_means).cpu().numpy().tolist()
@@ -273,17 +294,21 @@ class VNBenchmark:
         )
 
         for i in range(self.num_views):
-            self.dataset_similarity_per_view_metrics[f"view_{i}_diag_mean"].append(
+            self.dataset_per_view_metrics[f"view_{i}_diag_mean"].append(
                 diagonal_means[i]
             )
 
-            self.dataset_similarity_per_view_metrics[f"view_{i}_off_diag_mean"].append(
+            self.dataset_per_view_metrics[f"view_{i}_off_diag_mean"].append(
                 off_diagonal_means[i]
             )
 
-            self.dataset_similarity_per_view_metrics[f"view_{i}_off_diag_std"].append(
+            self.dataset_per_view_metrics[f"view_{i}_off_diag_std"].append(
                 off_diagonal_stds[i]
+            )
+            self.dataset_per_view_metrics[f"view_{i}_rotation_error"].append(
+                rotation_errors[i]
             )
 
     def plot_metrics(self):
-        plot_views_subplots(self.dataset_similarity_per_view_metrics, self.num_views)
+        plot_similarity_subplots(self.dataset_per_view_metrics, self.num_views)
+        plot_rotational_subplots(self.dataset_per_view_metrics, self.num_views)

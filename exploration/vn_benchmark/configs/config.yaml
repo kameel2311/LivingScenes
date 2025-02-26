@@ -25,17 +25,9 @@ camera:
   fx: 250
   fy: 250
 
-# Object Selection Settings
-# Will be moved from Object Collection Settings to here
-objects:
-  - class: "chair" #0
-    object_idx: 0
-  - class: "table" #0
-    object_idx: 0
-
 # Object Collection Settings
 object_collection:
-  number_collections: 100
+  number_collections: 10
   excluded_classes:
           # - "bed"
           # - "desk"
@@ -47,5 +39,9 @@ object_collection:
   object_collection_settings:
     object_scaling_mode: *scaling_mode
     number_views: *number_views
-    lhs_mode: "tracked" # scan, tracked
+    lhs_mode: "tracked" # scan, tracked, mesh
     rhs_mode: "mesh" # next_scan, mesh
+
+
+# NOTE: Currently idenetity rotation is used for all objects
+# TODO: Add noise to the pointclouds

@@ -61,7 +61,7 @@ if __name__ == "__main__":
     benchmark = VNBenchmark(load_vn_model())
 
     for object_collection in collection_generator.generate_collections():
-        metrics = benchmark.infer_collection(object_collection)
-        benchmark.collect_metrics(metrics, semantic_classes)
+        similarity_metrics, pose_errors = benchmark.infer_collection(object_collection)
+        benchmark.collect_metrics(similarity_metrics, pose_errors, semantic_classes)
 
     benchmark.plot_metrics()
