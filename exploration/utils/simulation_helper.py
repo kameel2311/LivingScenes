@@ -21,6 +21,7 @@ from utils.rendering_helper import (
     render_point_cloud_from_viewpoint,
 )
 from utils.metrics_helper import mean_absolute_distance, pointcloud_coverage
+from utils.plotting_utils import plot_gradual_metrics, plot_object_metrics
 
 # Consider /2 as dist from center is taken
 CLASS_MAX_DIM_SIZE = {
@@ -325,13 +326,26 @@ class Scene:
         # Add Objects wrt to Visiblity
         gradual_metrics = []
         per_object_gradual_metrics = {}
+        if changes_dict["changed_objects"] is None:
+            changed_idxs = []
+        elif isinstance(changes_dict["changed_objects"], list):
+            changed_idxs = changes_dict["changed_objects"]
+        elif isinstance(changes_dict["changed_objects"], float):
+            # Sequential Selection
+            number_changed = int(changes_dict["changed_objects"] * len(self.objects))
+            changed_idxs = list(range(len(self.objects)))[:number_changed]
+        else:
+            raise ValueError("Changed Objects not defined properly")
+
+        print(f"Changed Idxs: {changed_idxs}")
+
         for idx in range(len(self.objects)):
             if (
                 idx in changes_dict["skip_objects_from_gt"]
                 and not changes_dict["map_skipped_objects"]
             ):
                 continue
-            if idx in changes_dict["changed_objects"]:
+            if idx in changed_idxs:
                 visibility = changes_dict["changed_objects_visibility"]
             else:
                 visibility = changes_dict["unchanged_objects_visibility"]
@@ -343,34 +357,33 @@ class Scene:
             # Check if Rotation Error is Inflicted
             yaw_angle = None
             delta_trans = None
-            if idx in changes_dict["changed_objects"]:
-                if changes_dict["pose_error"] is not None:
-                    if changes_dict["pose_error"]["rotation"] is not None:
-                        rotational_error = changes_dict["pose_error"]["rotation"]
-                        if rotational_error["sampling_distribution"] == "uniform":
-                            yaw_angle = np.random.uniform(
-                                rotational_error["min_angle_error"],
-                                rotational_error["max_angle_error"],
-                            )
-                        else:
-                            raise NotImplementedError(
-                                "Sampling Distribution not implemented yet"
-                            )
-                    if changes_dict["pose_error"]["translation"] is not None:
-                        translation_error = changes_dict["pose_error"]["translation"]
-                        if translation_error["sampling_distribution"] == "uniform":
-                            delta_trans = np.append(
-                                np.random.uniform(
-                                    translation_error["min_displacement_xy"],
-                                    translation_error["max_displacement_xy"],
-                                    size=(2),
-                                ),
-                                0,
-                            )
-                        else:
-                            raise NotImplementedError(
-                                "Sampling Distribution not implemented yet"
-                            )
+            if idx in changed_idxs:
+                if changes_dict["rotation"] is not None:
+                    rotational_error = changes_dict["rotation"]
+                    if rotational_error["sampling_distribution"] == "uniform":
+                        yaw_angle = np.random.uniform(
+                            rotational_error["min_angle_error"],
+                            rotational_error["max_angle_error"],
+                        )
+                    else:
+                        raise NotImplementedError(
+                            "Sampling Distribution not implemented yet"
+                        )
+                if changes_dict["translation"] is not None:
+                    translation_error = changes_dict["translation"]
+                    if translation_error["sampling_distribution"] == "uniform":
+                        delta_trans = np.append(
+                            np.random.uniform(
+                                translation_error["min_displacement_xy"],
+                                translation_error["max_displacement_xy"],
+                                size=(2),
+                            ),
+                            0,
+                        )
+                    else:
+                        raise NotImplementedError(
+                            "Sampling Distribution not implemented yet"
+                        )
 
             for view_id in range(max_view_id):
                 view_ids.append(view_id)
@@ -425,7 +438,7 @@ class Scene:
         else:
             raise ValueError("No objects added to the scene")
 
-    def visualize(self):
+    def visualize(self, title=None):
         # print(f"Scene Shape: {self._gt_scene_pointcloud.shape}")
 
         try:
@@ -437,7 +450,7 @@ class Scene:
         draw_point_cloud(
             self._gt_scene_pointcloud,
             overlay_pointcloud=overlay_pointcloud,
-            title="Simulated Scene",
+            title=title,
         )
 
     def get_scene_MAD(self):
@@ -460,6 +473,105 @@ class Scene:
         self._simulated_scene_pointcloud = []
         self._simulated_scene_history = []
         self._gt_scene_pointcloud = None
+
+
+class BenchmarkRunner:
+    def __init__(self, objects: list, reconstruction_config: dict):
+        self.objects = objects
+        self.config = reconstruction_config
+        self.panoptic_scene_metrics, self.panoptic_object_metrics = [], []
+        self.vn_enhanced_scene_metrics, self.vn_enhanced_object_metrics = [], []
+
+        # For Benchmark Run
+        self.x_axis = None
+        self.x_label = None
+        self.plot_title = None
+
+    def generate_run_settings(self):
+        if self.config["run_type"] == "single":
+            panoptic_run_settings = self.config["single_settings"]["panoptic"]
+            vn_enhanced_run_settings = self.config["single_settings"]["vn_enhanced"]
+            self.plot_title = "Single Object Run"
+            yield panoptic_run_settings, vn_enhanced_run_settings
+        elif self.config["run_type"] == "benchmark":
+            panoptic_run_settings = self.config["study"]["default_settings"]["panoptic"]
+            vn_enhanced_run_settings = self.config["study"]["default_settings"][
+                "vn_enhanced"
+            ]
+            study = self.config["study"]["name"]
+            params = self.config["study"]["params"]
+
+            # Parse the Settings
+            if study == "percentage_changed_objects":
+                values = np.arange(
+                    params["min"], params["max"] + params["step"], params["step"]
+                )
+                # Setting Plot Params
+                self.x_axis = values
+                self.x_label = "Percentage of Changed Objects"
+                self.plot_title = "Percentage of Changed Objects Benchmark"
+                print(f"Values: {values}")
+                for value in values:
+                    panoptic_run_settings["changed_objects"] = value
+                    vn_enhanced_run_settings["changed_objects"] = value
+                    yield panoptic_run_settings, vn_enhanced_run_settings
+        else:
+            raise NotImplementedError("Benchmark Type not implemented yet")
+
+    def run_benchmark(self):
+        for (
+            panoptic_settings,
+            vn_enhanced_settings,
+        ) in self.generate_run_settings():
+            # Create Scene
+            scene = Scene(self.objects)
+
+            print(f"Panoptic Settings: {panoptic_settings}")
+            print(f"VN Enhanced Settings: {vn_enhanced_settings}")
+
+            # Gather Panoptic Metrics
+            scene.set_gt_scene(panoptic_settings)
+            panoptic_scene_metrics, panoptic_object_metrics = (
+                scene.inflict_scene_changes(panoptic_settings)
+            )
+            scene.visualize(title="Panoptic Scene")
+
+            # Gather Enhancement* Metrics
+            scene.clear_scene()
+            scene.set_gt_scene(vn_enhanced_settings)
+            vn_enhanced_scene_metrics, vn_enhanced_object_metrics = (
+                scene.inflict_scene_changes(vn_enhanced_settings)
+            )
+            scene.visualize(title="VN Enhanced Scene")
+
+            if self.config["run_type"] == "single":
+                self.panoptic_scene_metrics = panoptic_scene_metrics
+                self.panoptic_object_metrics = panoptic_object_metrics
+                self.vn_enhanced_scene_metrics = vn_enhanced_scene_metrics
+                self.vn_enhanced_object_metrics = vn_enhanced_object_metrics
+            elif self.config["run_type"] == "benchmark":
+                self.panoptic_scene_metrics.append(panoptic_scene_metrics[-1])
+                self.vn_enhanced_scene_metrics.append(vn_enhanced_scene_metrics[-1])
+
+    def plot_metrics(self):
+        if not (
+            len(self.panoptic_scene_metrics) and len(self.vn_enhanced_scene_metrics)
+        ):
+            raise ValueError("Run the benchmark first")
+
+        plot_gradual_metrics(
+            title=self.plot_title,
+            x_axis=self.x_axis,
+            x_label=self.x_label,
+            panoptic=self.panoptic_scene_metrics,
+            vn_enhanced=self.vn_enhanced_scene_metrics,
+        )
+        if self.config["run_type"] == "single":
+
+            plot_object_metrics(
+                panoptic=self.panoptic_object_metrics,
+                vn_enhancement=self.vn_enhanced_object_metrics,
+            )
 
 
 if __name__ == "__main__":

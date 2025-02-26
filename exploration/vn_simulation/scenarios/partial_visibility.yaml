@@ -1,5 +1,4 @@
 experiment_name: partial_visibility
-random_seed: 0
 
 # Universal Object Settings
 object_settings:
@@ -34,29 +33,71 @@ objects_loader:
     - "desk"
 
 # Assumption that objects were {unchanged_objects_visibility} visible before change
+random_seed: 0 # Controls the Scene
 reconstruction:
-  panoptic:
-    unchanged_objects_visibility: &unchanged_objects_visibility 1
-    # changed_objects: &changed_objects [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
-    changed_objects: &changed_objects [0, 1, 6, 8, 10]
-    skip_objects_from_gt: &skip_objects_from_gt []
-    map_skipped_objects: False
-    changed_objects_visibility: 0.5 # Starting from index 0
-    coverage_epsilon: 0.05
-    pose_error: # Keep Blank as None
+  run_type: single # single, benchmark
 
-  vn_enhanced:
-    unchanged_objects_visibility: *unchanged_objects_visibility
-    changed_objects: *changed_objects
-    skip_objects_from_gt: *skip_objects_from_gt
-    map_skipped_objects: False
-    changed_objects_visibility: 1 # Starting from index 0
-    coverage_epsilon: 0.05
-    pose_error:
+  # Regardless of Run Type
+  universal_values:
+    unchanged_objects_visibility: &unchanged_objects_visibility 1
+    skip_objects_from_gt: &skip_objects_from_gt []
+    map_skipped_objects: &map_skipped_objects False
+    coverage_epsilon: &coverage_epsilon 0.05
+    
+  study:
+    name: "percentage_changed_objects" # "percentage_changed_objects", "panoptic_visibility", "vn_visibility", "rotation", "translation" # Selects the study, others to default values 
+                                       # Both                           Panoptic               Vn_enhanced     Vn_enhanced  Vn_enhanced  # Which Settings are Affected
+    default_settings:
+      panoptic:
+        unchanged_objects_visibility: *unchanged_objects_visibility
+        skip_objects_from_gt: *skip_objects_from_gt
+        map_skipped_objects: *map_skipped_objects
+        coverage_epsilon: *coverage_epsilon
+        rotation: # Keep Blank as None
+        translation: # Keep Blank as None
+        changed_objects: 0.5 # To be defined  # Here defined as percentage of objects
+        changed_objects_visibility: 0.5 # To be defined
+
+      vn_enhanced:
+        unchanged_objects_visibility: *unchanged_objects_visibility
+        skip_objects_from_gt: *skip_objects_from_gt
+        map_skipped_objects: *map_skipped_objects
+        coverage_epsilon: *coverage_epsilon
+        changed_objects: 0.5 # To be defined
+        changed_objects_visibility: 1 # To be defined  .... # TODO Make this a study variable
+        rotation: # To be defined
+        translation: # To be defined
+
+    params:
+      min: 0.1
+      max: 0.9
+      step: 0.1
+
+  # To Simulate Controlled Scenario for Visuals
+  single_settings:
+    panoptic:
+      unchanged_objects_visibility: *unchanged_objects_visibility
+      # changed_objects: &changed_objects [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+      # changed_objects: &changed_objects [0, 1, 6, 8, 10]
+      changed_objects: &changed_objects 0.5
+      skip_objects_from_gt: *skip_objects_from_gt
+      map_skipped_objects: *map_skipped_objects
+      changed_objects_visibility: 0.25 # Starting from index 0
+      coverage_epsilon: *coverage_epsilon
+      rotation: # Keep Blank as None
+      translation: # Keep Blank as None
+
+    vn_enhanced:
+      unchanged_objects_visibility: *unchanged_objects_visibility
+      changed_objects: *changed_objects
+      skip_objects_from_gt: *skip_objects_from_gt
+      map_skipped_objects: *map_skipped_objects
+      changed_objects_visibility: 1 # Starting from index 0
+      coverage_epsilon: *coverage_epsilon
       rotation: 
-        min_angle_error: 0
-        max_angle_error: 20
-        sampling_distribution: "uniform"
+        # min_angle_error: 0
+        # max_angle_error: 20
+        # sampling_distribution: "uniform"
       translation:
         # min_displacement_xy: 0
         # max_displacement_xy: 0.1
