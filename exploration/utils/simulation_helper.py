@@ -231,13 +231,16 @@ class Object:
         assert len(self._depth_images), "No images have been saved"
         return self._depth_images
 
-    def visualize(self, depth=False):
+    def visualize(self, depth=False, full_pc=True):
         for i in range(self.num_views):
-            draw_point_cloud(
-                self._pointcloud,
-                overlay_pointcloud=self._rendered_views[i],
-                title=f"Viewpoint {i}",
-            )
+            if full_pc:
+                draw_point_cloud(
+                    self._pointcloud,
+                    overlay_pointcloud=self._rendered_views[i],
+                    title=f"Viewpoint {i}",
+                )
+            else:
+                draw_point_cloud(self._rendered_views[i], title=f"Viewpoint {i}")
             if depth:
                 assert self.save_depth, "Depth Images not saved"
                 plt.imshow(self._depth_images[i])

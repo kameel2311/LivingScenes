@@ -200,18 +200,31 @@ def plot_dataset(
     plt.show()
 
 
-def plot_similarity_subplots(dataset, num_views):
+def generate_similarity_subplot(num_views, dataset, class_idx=None):
     fig, axes = plt.subplots(num_views, 1, figsize=(10, 6 * num_views))
     if num_views == 1:
-        axes = [axes]  # Ensure axes is iterable when there's only one subplot
+        axes = [axes]
 
+    classes = dataset["classes"]
     for i, view in enumerate(range(num_views)):
         ax = axes[i]
         diag_mean = dataset[f"view_{view}_diag_mean"]
         off_diag_mean = dataset[f"view_{view}_off_diag_mean"]
+        off_diag_std = dataset[f"view_{view}_std_diag_mean"]
+
+        if class_idx is None:
+            diag_mean_values = [item for sublist in diag_mean for item in sublist]
+            off_diag_mean_values = [
+                item for sublist in off_diag_mean for item in sublist
+            ]
+            off_diag_std_values = [item for sublist in off_diag_std for item in sublist]
+        else:
+            diag_mean_values = [sublist[class_idx] for sublist in diag_mean]
+            off_diag_mean_values = [sublist[class_idx] for sublist in off_diag_mean]
+            off_diag_std_values = [sublist[class_idx] for sublist in off_diag_std]
 
         sns.histplot(
-            [item for sublist in diag_mean for item in sublist],
+            diag_mean_values,
             bins=10,
             kde=True,
             color="blue",
@@ -222,7 +235,7 @@ def plot_similarity_subplots(dataset, num_views):
         )
 
         sns.histplot(
-            [item for sublist in off_diag_mean for item in sublist],
+            off_diag_mean_values,
             bins=10,
             kde=True,
             color="orange",
@@ -233,14 +246,43 @@ def plot_similarity_subplots(dataset, num_views):
             ax=ax,
         )
 
+        sns.histplot(
+            off_diag_std_values,
+            bins=10,
+            kde=True,
+            color="yellow",
+            label=f"Off-Diagonal Std from Mean (View {view})",
+            alpha=0.6,
+            stat="density",
+            linestyle="dashed",
+            ax=ax,
+        )
+
         ax.set_xlabel("Values")
         ax.set_ylabel("Density")
-        ax.set_title(f"Histogram and Density for View {view}")
+        if class_idx is not None:
+            ax.set_title(
+                f"Histogram and Density for View {view} (Class {classes[class_idx]})"
+            )
+        else:
+            ax.set_title(f"Histogram and Density for View {view}")
         ax.legend()
         ax.grid(axis="y", alpha=0.3)
+    return fig, axes
 
-    plt.tight_layout()
+
+def plot_similarity_subplots(dataset, num_views, plot_classes=False):
+    fig, axes = generate_similarity_subplot(num_views, dataset)
+    fig.tight_layout()
     plt.show()
+
+    if plot_classes:
+        classes = dataset["classes"]
+        for class_idx, class_name in enumerate(classes):
+            print(f"Plotting for class {class_name}")
+            fig, axes = generate_similarity_subplot(num_views, dataset, class_idx)
+            fig.tight_layout()
+            plt.show()
 
 
 def plot_rotational_subplots(dataset, num_views):

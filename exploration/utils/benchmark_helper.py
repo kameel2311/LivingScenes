@@ -60,10 +60,16 @@ class ObjectTracked(Object):
                 new_tracked_pointcloud, axis=0
             )
 
-    def visualize_active_tracked_pointcloud(self):
+    def visualize_active_tracked_pointcloud(self, full_pc=False):
         if self._active_tracked_pointcloud is None:
             raise ValueError("No active tracked pointcloud available")
-        draw_point_cloud(self._active_tracked_pointcloud)
+        if full_pc:
+            draw_point_cloud(
+                self.get_pointcloud(),
+                overlay_pointcloud=self._active_tracked_pointcloud,
+            )
+        else:
+            draw_point_cloud(self._active_tracked_pointcloud)
 
 
 class ObjectCollection:
@@ -115,6 +121,9 @@ class ObjectCollection:
             else:
                 raise ValueError(f"Invalid mode: {self.rhs_mode}")
         return lhs_pointclouds, rhs_pointclouds
+
+    def get_collection_classes(self):
+        return [object.semantic_class for object in self.objects]
 
 
 # TODO: Add intraclass
@@ -293,6 +302,10 @@ class VNBenchmark:
             == self.num_views
         )
 
+        # Set the Classes
+        self.dataset_per_view_metrics["classes"] = classes
+
+        # Set the Metrics
         for i in range(self.num_views):
             self.dataset_per_view_metrics[f"view_{i}_diag_mean"].append(
                 diagonal_means[i]
@@ -309,6 +322,46 @@ class VNBenchmark:
                 rotation_errors[i]
             )
 
-    def plot_metrics(self):
-        plot_similarity_subplots(self.dataset_per_view_metrics, self.num_views)
+    def plot_metrics(self, plot_classes=True):
+        plot_similarity_subplots(
+            self.dataset_per_view_metrics, self.num_views, plot_classes=plot_classes
+        )
         plot_rotational_subplots(self.dataset_per_view_metrics, self.num_views)
+
+
+if __name__ == "__main__":
+    from utils.dataloader import Dataloader
+
+    object_class = "chair"
+    object_idx = 2
+    num_points = 2000
+    num_rend_points = 500
+    num_views = 4
+
+    print(f"Testing Object Class: {object_class} and Index: {object_idx}")
+
+    # Loading the Object
+    dataloader = Dataloader("ModelNet10", None)
+    path_to_file = dataloader.get_path(object_class, object_idx)
+
+    # Defining the Camera
+    camera = Camera(scale=1, image_height=500, image_width=500, fx=250, fy=250)
+    object = ObjectTracked(
+        semantic_class=object_class,
+        semantic_idx=object_idx,
+        path=path_to_file,
+        num_points=num_points,
+        num_rend_points=num_rend_points,
+        num_views=num_views,
+        min_angle=0,
+        max_angle=360,
+        camera=camera,
+        scaling_Mode="rendering",
+        adapt_num_points=False,
+        save_depth=False,
+        verbose=True,
+    )
+    # object.visualize(full_pc=True)
+    for i in range(num_views):
+        object.add_active_tracked_pointcloud(i)
+        object.visualize_active_tracked_pointcloud(full_pc=True)

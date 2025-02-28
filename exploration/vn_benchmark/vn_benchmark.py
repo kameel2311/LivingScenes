@@ -64,6 +64,11 @@ if __name__ == "__main__":
 
     for object_collection in collection_generator.generate_collections():
         similarity_metrics, pose_errors = benchmark.infer_collection(object_collection)
+
+        # Should work for now since no duplicates and no random class selection
+        assert (
+            semantic_classes == object_collection.get_collection_classes()
+        ), "Mismatch in the classes"
         benchmark.collect_metrics(similarity_metrics, pose_errors, semantic_classes)
 
-    benchmark.plot_metrics()
+    benchmark.plot_metrics(config["plot_similarity_per_class"])

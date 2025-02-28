@@ -27,7 +27,7 @@ camera:
 
 # Object Collection Settings
 object_collection:
-  number_collections: 10
+  number_collections: 50
   excluded_classes:
           # - "bed"
           # - "desk"
@@ -41,6 +41,9 @@ object_collection:
     number_views: *number_views
     lhs_mode: "tracked" # scan, tracked, mesh
     rhs_mode: "mesh" # next_scan, mesh
+
+# Plot Settings
+plot_similarity_per_class: True
 
 
 # NOTE: Currently idenetity rotation is used for all objects
