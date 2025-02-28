@@ -1,6 +1,7 @@
 import os
 import sys
 import yaml
+import random
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
@@ -46,6 +47,7 @@ if __name__ == "__main__":
     # Setting the Random Seed
     np.random.seed(config["random_seed"])
     torch_manual_seed(config["random_seed"])
+    random.seed(config["random_seed"])
 
     # Setting the Data Loader
     dataloader = Dataloader(
