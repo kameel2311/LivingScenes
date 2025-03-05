@@ -26,11 +26,14 @@ camera:
   fy: 250
 
 # Object Collection Settings
+epsilon: 0.5 #For Overlap Calculation , 10 meter rendering, 1m is 0.05
 object_collection:
-  number_collections: 50
+  number_collections: 2
   excluded_classes:
           # - "bed"
-          # - "desk"
+          # - "chair"
+          # - "sofak"
+          # - "table"
 
   object_collection_sampler:
     type: "interclass" # interclass, intraclass TODO: Add intraclass
@@ -43,7 +46,9 @@ object_collection:
     rhs_mode: "mesh" # next_scan, mesh
 
 # Plot Settings
-plot_similarity_per_class: True
+plot_per_class: True
+save_plots: True # Either Plot or Save
+save_dir: "results/full_dataset_overlap"
 
 
 # NOTE: Currently idenetity rotation is used for all objects

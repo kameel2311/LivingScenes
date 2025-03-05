@@ -35,6 +35,7 @@ from utils.metrics_helper import (
     compute_pointcloud_overlap,
     plot_similarity_subplots,
     plot_rotational_subplots,
+    compute_pointcloud_overlap,
 )
 
 sys.path.append("../../")
@@ -222,14 +223,29 @@ class VNBenchmark:
 
         self.dataset_per_view_metrics = defaultdict(list)
 
-    def infer_collection(self, object_collection: ObjectCollection):
+    def get_overlap_views(self, pc1, pc2, epsilon):
+        overlaps = []
+        pc1 = np.array(pc1)
+        pc2 = np.array(pc2)
+        for lhs_pc, rhs_pc in zip(pc1, pc2):
+            overlaps.append(compute_pointcloud_overlap(lhs_pc, rhs_pc, epsilon))
+        return np.array(overlaps)
+
+    def infer_collection(self, object_collection: ObjectCollection, epsilon=0.5):
         collection_similarity_per_view_metrics = defaultdict(list)
         collection_pose_error_per_view_metrics = defaultdict(list)
+        collection_pointcloud_per_view_metrics = defaultdict(list)
         self.num_views = object_collection.num_views
         for idx in range(self.num_views):
             lhs_pointclouds, rhs_pointclouds = object_collection.get_view_pointclouds(
                 idx
             )
+
+            # Compute the Overlap
+            overlap = self.get_overlap_views(lhs_pointclouds, rhs_pointclouds, epsilon)
+            collection_pointcloud_per_view_metrics["overlap"].append(overlap)
+
+            # Run Inference
             lhs_pointclouds = (
                 torch.tensor(np.array(lhs_pointclouds))
                 .to(self.device)
@@ -242,9 +258,6 @@ class VNBenchmark:
                 .float()
                 .transpose(-1, -2)
             )
-            print(idx)
-            print(lhs_pointclouds.shape)
-            print(rhs_pointclouds.shape)
 
             with torch.no_grad():
                 lhs_code = self.model.encode(lhs_pointclouds)
@@ -282,15 +295,17 @@ class VNBenchmark:
         return (
             collection_similarity_per_view_metrics,
             collection_pose_error_per_view_metrics,
+            collection_pointcloud_per_view_metrics,
         )
 
     def collect_metrics(
-        self, similarity_metric, pose_errors, classes
+        self, similarity_metric, pose_errors, pointcloud_metric, classes
     ):  # TODO: Adapt for Intraclass too
         # NOW ONLY FOR INTERCLASS
         diagonal_means = similarity_metric["diag_mean"]
         off_diagonal_means = similarity_metric["off_diag_mean"]
         off_diagonal_stds = similarity_metric["off_diag_std"]
+        overlap = pointcloud_metric["overlap"]
         rotation_errors = pose_errors["rotation_error"]
 
         # Convert GPU Tensor to CPU List
@@ -318,24 +333,34 @@ class VNBenchmark:
             self.dataset_per_view_metrics[f"view_{i}_off_diag_std"].append(
                 off_diagonal_stds[i]
             )
+            self.dataset_per_view_metrics[f"view_{i}_overlap"].append(overlap[i])
             self.dataset_per_view_metrics[f"view_{i}_rotation_error"].append(
                 rotation_errors[i]
             )
 
-    def plot_metrics(self, plot_classes=True):
+    def plot_metrics(
+        self, plot_classes=True, save=False, save_dir=None, cls_subfolder=None
+    ):
         plot_similarity_subplots(
-            self.dataset_per_view_metrics, self.num_views, plot_classes=plot_classes
+            self.dataset_per_view_metrics,
+            self.num_views,
+            plot_classes=plot_classes,
+            save=save,
+            save_dir=save_dir,
+            cls_subfolder=cls_subfolder,
         )
-        plot_rotational_subplots(self.dataset_per_view_metrics, self.num_views)
+        plot_rotational_subplots(
+            self.dataset_per_view_metrics, self.num_views, save=save, save_dir=save_dir
+        )
 
 
 if __name__ == "__main__":
     from utils.dataloader import Dataloader
 
-    object_class = "chair"
+    object_class = "night_stand"
     object_idx = 2
-    num_points = 2000
-    num_rend_points = 500
+    num_points = 1000
+    num_rend_points = 250
     num_views = 4
 
     print(f"Testing Object Class: {object_class} and Index: {object_idx}")
@@ -362,6 +387,9 @@ if __name__ == "__main__":
         verbose=True,
     )
     # object.visualize(full_pc=True)
+    full_pc = object.get_pointcloud()
     for i in range(num_views):
         object.add_active_tracked_pointcloud(i)
         object.visualize_active_tracked_pointcloud(full_pc=True)
+        active_pc = object.get_active_tracked_pointcloud()
+        print("Overlap: ", compute_pointcloud_overlap(full_pc, active_pc, epsilon=0.5))

@@ -5,6 +5,7 @@ import torch
 import seaborn as sns
 import pandas as pd
 from scipy.spatial import cKDTree
+import os
 
 
 def angular_similarity(a, b):
@@ -211,6 +212,7 @@ def generate_similarity_subplot(num_views, dataset, class_idx=None):
         diag_mean = dataset[f"view_{view}_diag_mean"]
         off_diag_mean = dataset[f"view_{view}_off_diag_mean"]
         off_diag_std = dataset[f"view_{view}_std_diag_mean"]
+        overlap = dataset[f"view_{view}_overlap"]
 
         if class_idx is None:
             diag_mean_values = [item for sublist in diag_mean for item in sublist]
@@ -218,44 +220,41 @@ def generate_similarity_subplot(num_views, dataset, class_idx=None):
                 item for sublist in off_diag_mean for item in sublist
             ]
             off_diag_std_values = [item for sublist in off_diag_std for item in sublist]
+            overlap_values = [item for sublist in overlap for item in sublist]
         else:
             diag_mean_values = [sublist[class_idx] for sublist in diag_mean]
             off_diag_mean_values = [sublist[class_idx] for sublist in off_diag_mean]
             off_diag_std_values = [sublist[class_idx] for sublist in off_diag_std]
+            overlap_values = [sublist[class_idx] for sublist in overlap]
 
-        sns.histplot(
+        sns.kdeplot(
             diag_mean_values,
-            bins=10,
-            kde=True,
             color="blue",
+            linestyle="dashed",
             label=f"Diagonal Means (View {view})",
             alpha=0.6,
-            stat="density",
             ax=ax,
+            fill=True,
         )
 
-        sns.histplot(
+        sns.kdeplot(
             off_diag_mean_values,
-            bins=10,
-            kde=True,
             color="orange",
+            linestyle="dashed",
             label=f"Off-Diagonal Means (View {view})",
             alpha=0.6,
-            stat="density",
-            linestyle="dashed",
             ax=ax,
+            fill=True,
         )
 
-        sns.histplot(
-            off_diag_std_values,
-            bins=10,
-            kde=True,
-            color="yellow",
-            label=f"Off-Diagonal Std from Mean (View {view})",
-            alpha=0.6,
-            stat="density",
+        sns.kdeplot(
+            overlap_values,
+            color="green",
             linestyle="dashed",
+            label=f"Overlap (View {view})",
+            alpha=0.6,
             ax=ax,
+            fill=True,
         )
 
         ax.set_xlabel("Values")
@@ -268,24 +267,102 @@ def generate_similarity_subplot(num_views, dataset, class_idx=None):
             ax.set_title(f"Histogram and Density for View {view}")
         ax.legend()
         ax.grid(axis="y", alpha=0.3)
+        ax.set_xlim(0, 1)
+        fig.subplots_adjust(hspace=0.7)
     return fig, axes
 
 
-def plot_similarity_subplots(dataset, num_views, plot_classes=False):
-    fig, axes = generate_similarity_subplot(num_views, dataset)
-    fig.tight_layout()
-    plt.show()
+def generate_similarity_correlation_subplot(num_views, dataset, class_idx=None):
+    fig, axes = plt.subplots(num_views, 1, figsize=(10, 6 * num_views))
+    if num_views == 1:
+        axes = [axes]
 
+    classes = dataset["classes"]
+    for i, view in enumerate(range(num_views)):
+        ax = axes[i]
+        diag_mean = dataset[f"view_{view}_diag_mean"]
+        overlap = dataset[f"view_{view}_overlap"]
+
+        if class_idx is None:
+            diag_mean_values = [item for sublist in diag_mean for item in sublist]
+            overlap_values = [item for sublist in overlap for item in sublist]
+        else:
+            diag_mean_values = [sublist[class_idx] for sublist in diag_mean]
+            overlap_values = [sublist[class_idx] for sublist in overlap]
+
+        sns.scatterplot(
+            x=overlap_values,
+            y=diag_mean_values,
+            color="blue",
+            label=f"Overlap vs Diagonal Means (View {view})",
+            alpha=0.6,
+            ax=ax,
+        )
+
+        ax.set_xlabel("Overlap")
+        ax.set_ylabel("Diagonal Means")
+        if class_idx is not None:
+            ax.set_title(
+                f"Histogram and Density for View {view} (Class {classes[class_idx]})"
+            )
+        else:
+            ax.set_title(f"Overlap vs Diagonal Means for View {view}")
+        ax.legend()
+        ax.grid(axis="y", alpha=0.3)
+        ax.set_xlim(0, 1)
+        fig.subplots_adjust(hspace=0.7)
+        plt.tight_layout()
+    return fig, axes
+
+
+def plot_similarity_subplots(
+    dataset,
+    num_views,
+    plot_classes=False,
+    save=False,
+    save_dir=None,
+    cls_subfolder=None,
+):
+    fig_sim, _ = generate_similarity_subplot(num_views, dataset)
+    fig_corr, _ = generate_similarity_correlation_subplot(num_views, dataset)
+
+    # Per Dataset Plots
+    if save:
+        assert save_dir is not None, "Directory must be provided to save the plot"
+        fig_sim.savefig(os.path.join(save_dir, "similarity_plot_database.png"))
+        fig_corr.savefig(os.path.join(save_dir, "correlation_plot_database.png"))
+        plt.close(fig_sim)  # Close the figure after saving
+        plt.close(fig_corr)
+    else:
+        plt.show()
+
+    # Plot for each class
     if plot_classes:
+        if cls_subfolder is not None:
+            save_dir = os.path.join(save_dir, cls_subfolder)
         classes = dataset["classes"]
         for class_idx, class_name in enumerate(classes):
-            print(f"Plotting for class {class_name}")
-            fig, axes = generate_similarity_subplot(num_views, dataset, class_idx)
-            fig.tight_layout()
-            plt.show()
+            fig_sim_class, _ = generate_similarity_subplot(
+                num_views, dataset, class_idx
+            )
+            fig_corr_class, _ = generate_similarity_correlation_subplot(
+                num_views, dataset, class_idx
+            )
+            if save:
+                print(f"Saving to {save_dir}")
+                fig_sim_class.savefig(
+                    os.path.join(save_dir, f"similarity_subplot_{class_name}.png")
+                )
+                fig_corr_class.savefig(
+                    os.path.join(save_dir, f"correlation_subplot_{class_name}.png")
+                )
+                plt.close(fig_sim_class)
+                plt.close(fig_corr_class)
+            else:
+                plt.show()
 
 
-def plot_rotational_subplots(dataset, num_views):
+def plot_rotational_subplots(dataset, num_views, save=False, save_dir=None):
     fig, axes = plt.subplots(num_views, 1, figsize=(10, 6 * num_views))
     if num_views == 1:
         axes = [axes]  # Ensure axes is iterable when there's only one subplot
@@ -312,7 +389,13 @@ def plot_rotational_subplots(dataset, num_views):
         ax.grid(axis="y", alpha=0.3)
 
     plt.tight_layout()
-    plt.show()
+
+    if save:
+        assert save_dir is not None, "Directory must be provided to save the plot"
+        fig.savefig(os.path.join(save_dir, "rotation_error_plot_database.png"))
+        plt.close(fig)  # Close the figure after saving
+    else:
+        plt.show()
 
 
 def plot_rre(rre, labels=None):

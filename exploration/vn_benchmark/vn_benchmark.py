@@ -44,6 +44,14 @@ if __name__ == "__main__":
     with open(os.path.join("configs", CONFIG_FILE_NAME), "r") as file:
         config = yaml.safe_load(file)
 
+    # Saving Directory
+    if config["save_plots"]:
+        if not os.path.exists(config["save_dir"]):
+            os.makedirs(config["save_dir"])
+            os.makedirs(os.path.join(config["save_dir"], "per_class"))
+        else:
+            raise ValueError("Directory already exists")
+
     # Setting the Random Seed
     np.random.seed(config["random_seed"])
     torch_manual_seed(config["random_seed"])
@@ -62,13 +70,24 @@ if __name__ == "__main__":
     # Load the Model
     benchmark = VNBenchmark(load_vn_model())
 
-    for object_collection in collection_generator.generate_collections():
-        similarity_metrics, pose_errors = benchmark.infer_collection(object_collection)
+    for i, object_collection in enumerate(collection_generator.generate_collections()):
+        print(f"Collection {i+1}/{config['object_collection']['number_collections']}")
+        similarity_metrics, pose_errors, pointcloud_metrics = (
+            benchmark.infer_collection(object_collection, epsilon=config["epsilon"])
+        )
 
         # Should work for now since no duplicates and no random class selection
         assert (
             semantic_classes == object_collection.get_collection_classes()
         ), "Mismatch in the classes"
-        benchmark.collect_metrics(similarity_metrics, pose_errors, semantic_classes)
+        benchmark.collect_metrics(
+            similarity_metrics, pose_errors, pointcloud_metrics, semantic_classes
+        )
 
-    benchmark.plot_metrics(config["plot_similarity_per_class"])
+    # Plotting and Saving the Results
+    benchmark.plot_metrics(
+        config["plot_per_class"],
+        config["save_plots"],
+        config["save_dir"],
+        cls_subfolder="per_class",
+    )
