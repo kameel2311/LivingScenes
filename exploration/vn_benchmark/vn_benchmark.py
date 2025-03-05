@@ -73,7 +73,9 @@ if __name__ == "__main__":
     for i, object_collection in enumerate(collection_generator.generate_collections()):
         print(f"Collection {i+1}/{config['object_collection']['number_collections']}")
         similarity_metrics, pose_errors, pointcloud_metrics = (
-            benchmark.infer_collection(object_collection, epsilon=config["epsilon"])
+            benchmark.infer_collection(
+                object_collection, epsilon=config["epsilon"], fps=config["fps"]
+            )
         )
 
         # Should work for now since no duplicates and no random class selection

@@ -7,6 +7,7 @@ import torch
 from collections import defaultdict  # Such a cool find btw
 from matplotlib import pyplot as plt
 from itertools import chain
+from pytorch3d.ops import sample_farthest_points
 
 sys.path.append("../")
 from utils.pointcloud_helper import (
@@ -231,7 +232,9 @@ class VNBenchmark:
             overlaps.append(compute_pointcloud_overlap(lhs_pc, rhs_pc, epsilon))
         return np.array(overlaps)
 
-    def infer_collection(self, object_collection: ObjectCollection, epsilon=0.5):
+    def infer_collection(
+        self, object_collection: ObjectCollection, epsilon=0.5, fps=False
+    ):
         collection_similarity_per_view_metrics = defaultdict(list)
         collection_pose_error_per_view_metrics = defaultdict(list)
         collection_pointcloud_per_view_metrics = defaultdict(list)
@@ -258,6 +261,19 @@ class VNBenchmark:
                 .float()
                 .transpose(-1, -2)
             )
+
+            # Furthest Point Sampling
+            if fps:
+                lhs_pointclouds = lhs_pointclouds.permute(0, 2, 1)
+                rhs_pointclouds = rhs_pointclouds.permute(0, 2, 1)
+                lhs_pointclouds, _ = sample_farthest_points(
+                    lhs_pointclouds, K=lhs_pointclouds.shape[1]
+                )
+                rhs_pointclouds, _ = sample_farthest_points(
+                    rhs_pointclouds, K=rhs_pointclouds.shape[1]
+                )
+                lhs_pointclouds = lhs_pointclouds.permute(0, 2, 1)
+                rhs_pointclouds = rhs_pointclouds.permute(0, 2, 1)
 
             with torch.no_grad():
                 lhs_code = self.model.encode(lhs_pointclouds)

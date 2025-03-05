@@ -202,7 +202,7 @@ def plot_dataset(
 
 
 def generate_similarity_subplot(num_views, dataset, class_idx=None):
-    fig, axes = plt.subplots(num_views, 1, figsize=(10, 6 * num_views))
+    fig, axes = plt.subplots(num_views, 1, figsize=(10, 3 * num_views))
     if num_views == 1:
         axes = [axes]
 
@@ -269,11 +269,12 @@ def generate_similarity_subplot(num_views, dataset, class_idx=None):
         ax.grid(axis="y", alpha=0.3)
         ax.set_xlim(0, 1)
         fig.subplots_adjust(hspace=0.7)
+        plt.tight_layout()
     return fig, axes
 
 
 def generate_similarity_correlation_subplot(num_views, dataset, class_idx=None):
-    fig, axes = plt.subplots(num_views, 1, figsize=(10, 6 * num_views))
+    fig, axes = plt.subplots(num_views, 1, figsize=(10, 3 * num_views))
     if num_views == 1:
         axes = [axes]
 
@@ -310,8 +311,71 @@ def generate_similarity_correlation_subplot(num_views, dataset, class_idx=None):
         ax.legend()
         ax.grid(axis="y", alpha=0.3)
         ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
         fig.subplots_adjust(hspace=0.7)
         plt.tight_layout()
+    return fig, axes
+
+
+def generate_classes_subplot(num_views, dataset):
+    """Plots only the class overlap and diagonal mean values of the last view: logical in tracked scan tests"""
+    if num_views == 1:
+        axes = [axes]
+
+    view = num_views - 1
+
+    classes = dataset["classes"]
+    fig, axes = plt.subplots(len(classes), 1, figsize=(10, 2 * len(classes)))
+    for class_idx, class_name in enumerate(classes):
+        ax = axes[class_idx]
+        diag_mean = dataset[f"view_{view}_diag_mean"]
+        off_diag_mean = dataset[f"view_{view}_off_diag_mean"]
+        off_diag_std = dataset[f"view_{view}_std_diag_mean"]
+        overlap = dataset[f"view_{view}_overlap"]
+
+        diag_mean_values = [sublist[class_idx] for sublist in diag_mean]
+        off_diag_mean_values = [sublist[class_idx] for sublist in off_diag_mean]
+        overlap_values = [sublist[class_idx] for sublist in overlap]
+
+        sns.kdeplot(
+            diag_mean_values,
+            color="blue",
+            linestyle="dashed",
+            label=f"Diagonal Means (View {view})",
+            alpha=0.6,
+            ax=ax,
+            fill=True,
+        )
+
+        sns.kdeplot(
+            off_diag_mean_values,
+            color="orange",
+            linestyle="dashed",
+            label=f"Off-Diagonal Means (View {view})",
+            alpha=0.6,
+            ax=ax,
+            fill=True,
+        )
+
+        sns.kdeplot(
+            overlap_values,
+            color="green",
+            linestyle="dashed",
+            label=f"Overlap (View {view})",
+            alpha=0.6,
+            ax=ax,
+            fill=True,
+        )
+        ax.set_title(f"Class: {class_name}")
+        ax.set_xlabel("Values")
+        ax.set_ylabel("Density")
+        ax.legend()
+        ax.grid(axis="y", alpha=0.3)
+        ax.set_xlim(0, 1)
+    fig.subplots_adjust(hspace=0.7)
+    # fig.suptitle(f"Classes Metrics for Last View: Only for Tracked Test")
+
+    plt.tight_layout()
     return fig, axes
 
 
@@ -325,14 +389,17 @@ def plot_similarity_subplots(
 ):
     fig_sim, _ = generate_similarity_subplot(num_views, dataset)
     fig_corr, _ = generate_similarity_correlation_subplot(num_views, dataset)
+    fig_classes, _ = generate_classes_subplot(num_views, dataset)
 
     # Per Dataset Plots
     if save:
         assert save_dir is not None, "Directory must be provided to save the plot"
         fig_sim.savefig(os.path.join(save_dir, "similarity_plot_database.png"))
         fig_corr.savefig(os.path.join(save_dir, "correlation_plot_database.png"))
+        fig_classes.savefig(os.path.join(save_dir, "classes_plot_database.png"))
         plt.close(fig_sim)  # Close the figure after saving
         plt.close(fig_corr)
+        plt.close(fig_classes)
     else:
         plt.show()
 
@@ -349,7 +416,6 @@ def plot_similarity_subplots(
                 num_views, dataset, class_idx
             )
             if save:
-                print(f"Saving to {save_dir}")
                 fig_sim_class.savefig(
                     os.path.join(save_dir, f"similarity_subplot_{class_name}.png")
                 )
