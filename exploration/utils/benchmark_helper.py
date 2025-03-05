@@ -19,6 +19,7 @@ from utils.pointcloud_helper import (
     center_pointcloud,
     center_pointcloud_v2,
     round_to_1,
+    add_gaussian_noise,
 )
 from utils.rendering_helper import (
     Camera,
@@ -62,6 +63,10 @@ class ObjectTracked(Object):
                 new_tracked_pointcloud, axis=0
             )
 
+    def get_full_tracked_pointcloud(self):
+        full_tracked_pointcloud = np.concatenate(self._rendered_views, axis=0)
+        return add_gaussian_noise(full_tracked_pointcloud, 0.1)
+
     def visualize_active_tracked_pointcloud(self, full_pc=False):
         if self._active_tracked_pointcloud is None:
             raise ValueError("No active tracked pointcloud available")
@@ -82,7 +87,7 @@ class ObjectCollection:
         self.rhs_mode = self.config["rhs_mode"]
 
         if self.lhs_mode != "mesh":
-            if self.rhs_mode == "mesh":
+            if self.rhs_mode == "mesh" or self.rhs_mode == "full_tracked":
                 self.num_views = self.config["number_views"]
             elif self.rhs_mode == "next_scan":
                 self.num_views = self.config["number_views"] - 1
@@ -99,7 +104,7 @@ class ObjectCollection:
             self.config["object_scaling_mode"] == "rendering"
         ), "Only Equal Sampling is supported for now"
 
-    def get_view_pointclouds(self, idx):
+    def get_view_pointclouds(self, idx, noise_std=None):
         lhs_pointclouds = []
         rhs_pointclouds = []
         if idx == self.num_views:
@@ -107,22 +112,31 @@ class ObjectCollection:
 
         for object in self.objects:
             if self.lhs_mode == "scan":
-                lhs_pointclouds.append(object.get_rendered_view(idx))
+                lhs_pointcloud = object.get_rendered_view(idx)
             elif self.lhs_mode == "tracked":
                 object.add_active_tracked_pointcloud(idx)
-                lhs_pointclouds.append(object.get_active_tracked_pointcloud())
+                lhs_pointcloud = object.get_active_tracked_pointcloud()
             elif self.lhs_mode == "mesh":  # IMPLEMENT THIS for 1 round
-                lhs_pointclouds.append(object.get_pointcloud())
+                lhs_pointcloud = object.get_pointcloud()
             else:
                 raise ValueError(f"Invalid mode: {self.lhs_mode}")
 
             if self.rhs_mode == "next_scan":
-                rhs_pointclouds.append(object.get_rendered_view(idx + 1))
+                rhs_pointcloud = object.get_rendered_view(idx + 1)
             elif self.rhs_mode == "mesh":
-                rhs_pointclouds.append(object.get_pointcloud())
+                rhs_pointcloud = object.get_pointcloud()
+            elif self.rhs_mode == "full_tracked":
+                rhs_pointcloud = object.get_full_tracked_pointcloud()
             else:
                 raise ValueError(f"Invalid mode: {self.rhs_mode}")
-        return lhs_pointclouds, rhs_pointclouds
+
+            if noise_std is not None and noise_std != 0.0:
+                lhs_pointcloud = add_gaussian_noise(np.array(lhs_pointcloud), noise_std)
+                rhs_pointcloud = add_gaussian_noise(np.array(rhs_pointcloud), noise_std)
+
+            lhs_pointclouds.append(lhs_pointcloud)
+            rhs_pointclouds.append(rhs_pointcloud)
+        return np.array(lhs_pointclouds), np.array(rhs_pointclouds)
 
     def get_collection_classes(self):
         return [object.semantic_class for object in self.objects]
@@ -217,17 +231,16 @@ class CollectionGenerator:
 
 
 class VNBenchmark:
-    def __init__(self, model):
+    def __init__(self, model, noise_std=0.0):
         self.model = model
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         torch.set_default_dtype(torch.float64)
 
         self.dataset_per_view_metrics = defaultdict(list)
+        self.noise_std = noise_std
 
     def get_overlap_views(self, pc1, pc2, epsilon):
         overlaps = []
-        pc1 = np.array(pc1)
-        pc2 = np.array(pc2)
         for lhs_pc, rhs_pc in zip(pc1, pc2):
             overlaps.append(compute_pointcloud_overlap(lhs_pc, rhs_pc, epsilon))
         return np.array(overlaps)
@@ -241,7 +254,7 @@ class VNBenchmark:
         self.num_views = object_collection.num_views
         for idx in range(self.num_views):
             lhs_pointclouds, rhs_pointclouds = object_collection.get_view_pointclouds(
-                idx
+                idx, noise_std=self.noise_std
             )
 
             # Compute the Overlap
@@ -250,16 +263,10 @@ class VNBenchmark:
 
             # Run Inference
             lhs_pointclouds = (
-                torch.tensor(np.array(lhs_pointclouds))
-                .to(self.device)
-                .float()
-                .transpose(-1, -2)
+                torch.tensor(lhs_pointclouds).to(self.device).float().transpose(-1, -2)
             )
             rhs_pointclouds = (
-                torch.tensor(np.array(rhs_pointclouds))
-                .to(self.device)
-                .float()
-                .transpose(-1, -2)
+                torch.tensor(rhs_pointclouds).to(self.device).float().transpose(-1, -2)
             )
 
             # Furthest Point Sampling
@@ -406,6 +413,12 @@ if __name__ == "__main__":
     full_pc = object.get_pointcloud()
     for i in range(num_views):
         object.add_active_tracked_pointcloud(i)
-        object.visualize_active_tracked_pointcloud(full_pc=True)
+        # object.visualize_active_tracked_pointcloud(full_pc=True)
         active_pc = object.get_active_tracked_pointcloud()
         print("Overlap: ", compute_pointcloud_overlap(full_pc, active_pc, epsilon=0.5))
+
+    # Visualize Full Tracked
+    tracked_full = object.get_full_tracked_pointcloud()
+    draw_point_cloud(
+        tracked_full, overlay_pointcloud=object.get_full_tracked_pointcloud()
+    )
