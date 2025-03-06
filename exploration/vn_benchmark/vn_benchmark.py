@@ -68,7 +68,11 @@ if __name__ == "__main__":
     semantic_classes = collection_generator.get_allowed_classes()
 
     # Load the Model
-    benchmark = VNBenchmark(model=load_vn_model(), noise_std=config["noise_std"])
+    benchmark = VNBenchmark(
+        model=load_vn_model(),
+        pose_estimation=config["pose_estimation"],
+        noise_std=config["noise_std"],
+    )
 
     for i, object_collection in enumerate(collection_generator.generate_collections()):
         print(f"Collection {i+1}/{config['object_collection']['number_collections']}")

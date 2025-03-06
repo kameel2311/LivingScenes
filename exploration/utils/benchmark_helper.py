@@ -8,6 +8,7 @@ from collections import defaultdict  # Such a cool find btw
 from matplotlib import pyplot as plt
 from itertools import chain
 from pytorch3d.ops import sample_farthest_points
+from pytorch3d.ops.points_alignment import iterative_closest_point
 
 sys.path.append("../")
 from utils.pointcloud_helper import (
@@ -29,14 +30,11 @@ from utils.rendering_helper import (
 from utils.simulation_helper import Object
 from utils.metrics_helper import (
     matrix_fitness_metric,
-    plot_data,
-    plot_dataset,
-    plot_rre,
     matrix_angular_similarity,
-    plot_correlation,
     compute_pointcloud_overlap,
     plot_similarity_subplots,
     plot_rotational_subplots,
+    plot_pose_subplots,
     compute_pointcloud_overlap,
 )
 
@@ -231,13 +229,14 @@ class CollectionGenerator:
 
 
 class VNBenchmark:
-    def __init__(self, model, noise_std=0.0):
+    def __init__(self, model, pose_estimation, noise_std=0.0):
         self.model = model
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         torch.set_default_dtype(torch.float64)
 
         self.dataset_per_view_metrics = defaultdict(list)
         self.noise_std = noise_std
+        self.pose_estimation = pose_estimation
 
     def get_overlap_views(self, pc1, pc2, epsilon):
         overlaps = []
@@ -306,14 +305,39 @@ class VNBenchmark:
             collection_similarity_per_view_metrics["off_diag_std"].append(off_diag_std)
 
             # Compute the Rotation Error
-            est_R, est_t, _, _ = kabsch_transformation_estimation(
-                lhs_code_se3.float(), rhs_code_se3.float()
-            )
+            if self.pose_estimation == "kabsch":
+                est_R, est_t, _, _ = kabsch_transformation_estimation(
+                    lhs_code_se3.float(), rhs_code_se3.float()
+                )
+                est_t = est_t.squeeze(-1)
+            elif self.pose_estimation == "icp":
+                est_R, est_t, _ = iterative_closest_point(
+                    lhs_pointclouds.permute(0, 2, 1),
+                    rhs_pointclouds.permute(0, 2, 1),
+                )[3]
+            else:
+                raise ValueError("Invalid Pose Estimation Mode")
+
+            # Compute Rotation Error
             rot_error = rotation_error(
                 est_R.cpu(), torch.stack([torch.eye(3)] * len(lhs_code_se3)).float()
             ).numpy()
             rot_error = np.reshape(rot_error, rot_error.shape[0])
+            rot_error_sym_compensated = np.minimum(
+                rot_error, np.abs(180 - rot_error), np.abs(90 - rot_error)
+            )
+
+            # Compute Translation Error
+            translation_error = torch.norm(est_t, dim=(-1)).cpu().numpy()
+
+            # Collect Metrics
             collection_pose_error_per_view_metrics["rotation_error"].append(rot_error)
+            collection_pose_error_per_view_metrics["rotation_error_sym_comp"].append(
+                rot_error_sym_compensated
+            )
+            collection_pose_error_per_view_metrics["translation_error"].append(
+                translation_error
+            )
 
         return (
             collection_similarity_per_view_metrics,
@@ -330,6 +354,8 @@ class VNBenchmark:
         off_diagonal_stds = similarity_metric["off_diag_std"]
         overlap = pointcloud_metric["overlap"]
         rotation_errors = pose_errors["rotation_error"]
+        rotation_errors_sym_comp = pose_errors["rotation_error_sym_comp"]
+        translation_errors = pose_errors["translation_error"]
 
         # Convert GPU Tensor to CPU List
         diagonal_means = torch.stack(diagonal_means).cpu().numpy().tolist()
@@ -360,6 +386,12 @@ class VNBenchmark:
             self.dataset_per_view_metrics[f"view_{i}_rotation_error"].append(
                 rotation_errors[i]
             )
+            self.dataset_per_view_metrics[f"view_{i}_rotation_error_sym_comp"].append(
+                rotation_errors_sym_comp[i]
+            )
+            self.dataset_per_view_metrics[f"view_{i}_translation_error"].append(
+                translation_errors[i]
+            )
 
     def plot_metrics(
         self, plot_classes=True, save=False, save_dir=None, cls_subfolder=None
@@ -373,6 +405,9 @@ class VNBenchmark:
             cls_subfolder=cls_subfolder,
         )
         plot_rotational_subplots(
+            self.dataset_per_view_metrics, self.num_views, save=save, save_dir=save_dir
+        )
+        plot_pose_subplots(
             self.dataset_per_view_metrics, self.num_views, save=save, save_dir=save_dir
         )
 

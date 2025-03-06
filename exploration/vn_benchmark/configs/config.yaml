@@ -29,9 +29,10 @@ camera:
 epsilon: 0.5 #For Overlap Calculation , 10 meter rendering, 1m is 0.05
 fps: False # Furthest Point Sampling
 noise_std: 0.1
+pose_estimation: kabsch # kabsch, icp, ----> icp_kabsch to be implemented
 
 object_collection:
-  number_collections: 100
+  number_collections: 2
   excluded_classes:
           # - "bed"
           # - "chair"
@@ -51,7 +52,7 @@ object_collection:
 # Plot Settings
 plot_per_class: True
 save_plots: True # Either Plot or Save
-save_dir: "results/full_dataset_full_tracked"
+save_dir: "results/t"
 
 
 # NOTE: Currently idenetity rotation is used for all objects
